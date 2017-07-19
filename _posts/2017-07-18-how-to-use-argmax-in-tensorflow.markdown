@@ -37,31 +37,32 @@ import tensorflow as tf
 
 sess = tf.InteractiveSession
 
-# 3 is a 0D index for the 1D tensor x.
+# A scalar index of a vector is a scalar.
 # 3 is the index of 4, so gathering 3 is 4.
 x = [ 1,2,3,4,3,2,1 ]
 tf.gather(x, 3).eval()
 # 4
 
-# The 0D index of a 2D tensor x is a 1D vector.
-# The row 0 of x is [1,2,3,4,3,2,1], so gathering 0 returns it.
+# A scalar index of a matrix x is a vector.
+# Row 0 of x is [1,2,3,4,3,2,1], so gathering 0 returns it.
 x = [[ 1,2,3,4,3,2,1],
      [ 2,3,4,3,2,1,0]]
 tf.gather(x, 0).eval()
 # [1,2,3,4, 3, 2, 1]
 
-# Gathering a 1D index will gather a 0D index for each element, and then concatenate them.
+# Gathering a vector index produces a scalar index for each element of the vector, and then concatenates them.
+# Gathering [1,0] produces row 1 and row 0. Concatenating them flips the rows in the original matrix.
 tf.gather(x, [1,0]).eval()
 # [[ 2,3,4,3,2,1,0],
    [ 1,2,3,4,3,2,1]]
 
-# In general, each 0D index within the index tensor will refer to an entire row in x.
+# In general, each scalar index within the index tensor will produce an entire row in x.
 tf.gather(x, [[[1]],[[0]]]).eval()
 # [[[2,3,4,3,2,1,0]],
    [[1,2,3,4,3,2,1]]]
 {% endhighlight %}
 
-gather assumes that each scalar is an index along the first dimension of the input. You can use gather_nd to target other values:
+gather assumes that each scalar is an index along the first dimension. You can use gather_nd to target other values:
 
 {% highlight python %}
 import tensorflow as tf
