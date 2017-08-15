@@ -3,7 +3,8 @@ layout: post
 author: Michael Burge
 title: "How do I modify a variable in Haskell?"
 published: true
-date: 2017-08-13 09:20:00 -0700
+started_date: 2017-08-13 09:20:00 -0700
+date: 2017-08-15 03:36:00 -0700
 tags:
   - haskell
 ---
