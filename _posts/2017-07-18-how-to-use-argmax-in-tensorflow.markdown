@@ -3,7 +3,8 @@ layout: post
 author: Michael Burge
 title: "How do you use argmax and gather in Tensorflow?"
 date: 2017-07-18 20:52:00 -0700
-categories: tensorflow
+tags:
+  - tensorflow
 ---
 
 An array $$a$$ has at least one maximum element $$x$$. $$argmax$$ in its simplest case gives the index $$i$$ of this maximum element, so that $$a_i = max(a)$$. The Tensorflow argmax requires you to designate one dimension of your tensor to act as that array.
