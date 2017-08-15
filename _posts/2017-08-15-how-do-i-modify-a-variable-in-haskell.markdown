@@ -712,6 +712,10 @@ updateArray arr = runST $ do
   loop
 {% endhighlight %}
 
+The difference between `ST` and `IO` is that `ST` only allows variables local to the `runST` call. Mutable local variables have no external side effects. They are completely safe to use, which is why we can embed them anywhere. The compiler ensures that the references never escape.
+
+`IO` lets you use global variables, write files, connect to databases, and all sorts of other things.
+
 ## Implicit Parameters
 
 In __Shadowing__, we learned that you can sometimes simulate mutation by creating a new value with the same name, rather than updating the existing value. In __State Monad__, we learned that you can make this more composable by hiding the parameters and implicitly threading them along. `ImplicitParams` is a language extension that allows you to thread hidden parameters anywhere in your code.
