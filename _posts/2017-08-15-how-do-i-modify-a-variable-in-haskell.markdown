@@ -163,9 +163,59 @@ If you run this sample, you should see a 10x10 matrix with all zeroes:
 
 Steps 1,2, and 4 are easy. Our problem is Step 3: We have no way to define `writeArray`, since the array is immutable.
 
-## Mutable Values
+## Mutable Arrays
 
 If arrays are immutable, could we somehow make it mutable?
+
+For arrays specifically, there is a mutable variant [`IOArray`](https://hackage.haskell.org/package/array-0.5.2.0/docs/Data-Array-MArray.html) that lets you allocate, read, and write mutable arrays in `IO` context. It even has a `writeArray` function that is very similar to the one we need. Here's how you would use it:
+
+{% highlight haskell %}
+import Data.Array.MArray
+import Data.Array.IO
+
+size = 10
+
+(!) = readArray
+
+main :: IO ()
+main = do
+  -- 1. Declare the array
+  arr <- newArray ((1,1), (size,size)) undefined 
+  let _ = arr :: IOArray (Int,Int) Integer
+
+  -- 2. Initialize the array to 0
+  sequence_ $ do
+    i <- [1..size]
+    j <- [1..size]
+    return $ writeArray arr (i, j) 0
+
+  -- 3. Set the diagonal to 1
+  sequence_ $ do
+    i <- [1..size]
+    return $ writeArray arr (i, i) 1
+
+  -- 4. Print the array
+  sequence_ $ do
+    i <- [1..size]
+    j <- [1..size]
+    return $ do
+      x <- arr ! (i,j)
+
+      putChar $ if x == 0
+                then '0'
+                else '1'
+      if j == size
+        then putChar '\n'
+        else return ()
+{% endhighlight %}
+
+The line `let _ = arr :: IOArray (Int,Int) Integer` is a way of giving a type signature to `arr` in `do` notation.
+
+People have written immutable, mutable, contiguous, automatically-parallelized, GPU-accelerated, and other types of arrays. It's always a good idea to choose the right data structure when writing a program in any language.
+
+In general, not every useful data structure automatically comes with a mutable variant. You can always write one yourself, but for the rest of this article we'll assume the array is immutable so that you can use techniques here more generally.
+
+## Mutable References
 
 [`Data.IORef`](https://hackage.haskell.org/package/base/docs/Data-IORef.html) allows us to create and modify mutable garbage-collected values in IO context. This makes programming in IO context similar to a language like C# or Javascript, if a bit more verbose.
 
@@ -268,7 +318,7 @@ main = do
 
 The expression `arr // [(index, value)]` is a new array with an updated value at index. It does not read or write to memory - `modifyIORef` will do the reading and writing - it simply is the new array. `[(index, value)]` is a list because `(//)` allows us to update multiple values at once, though I only update a single value each time here.
 
-One shortcoming of this technique is that it requires your code to be in `IO` context: `main`, `printElement`, and `writeArray` all use `IO`. If you want to add mutable variables throughout your code, you'll have to change everything to be in IO context. If you want to actually mutate global variables, this is necessary; but see the `ST` monad below to avoid this if you only need mutation within a single function.
+One shortcoming of this technique is that it requires your code to be in `IO` context: `main`, `printElement`, and `writeArray` all use `IO`. If you want to add mutable references throughout your code, you'll have to change everything to be in IO context. If you want to actually mutate global variables, this is necessary; but see the `ST` monad below to avoid this if you only need mutation within a single function.
 
 While this is the most direct way to do what we want, Haskellers usually get by without any mutation. How would that work?
 
@@ -876,3 +926,5 @@ The best one is probably this:
 updateArray :: IntArray -> IntArray
 updateArray arr = arr // [((i,i), 1) | i <- [1..size] ]
 {% endhighlight %}
+
+* Thanks to [Tome Jaguar](https://news.ycombinator.com/item?id=15017853) for the concept and code used in the __Mutable Arrays__ section!
