@@ -624,7 +624,7 @@ updateArray arr =
     updateNext = \(i, arr) -> (i+1, setDiagonal i arr)
 {% endhighlight %}
 
-A value of type `State s a` is a value of type `a` that implicitly reads and writes a state parameter of type `s`. You almost always want the strict version. Here is the above code written to use `State Int IntArray`:
+A value of type `State s a` is a value of type `a` that implicitly reads and writes a state parameter of type `s`. You almost always want the strict version. Here is the above code written to use `State`:
 
 {% highlight haskell %}
 import Control.Monad.State.Strict
@@ -674,21 +674,6 @@ updateArray arr = evalState (replicateM 10 updateNext) (1, arr)
 
 You can also mix tail recursive style to emulate loops that change mutable variables:
 
-{% highlight haskell %}
-updateArray :: IntArray -> IntArray
-updateArray arr = evalState loop (1, arr)
-  where
-    loop :: State LoopState IntArray
-    loop = do
-      (i, arr) <- get
-      if i <= 10
-      then do
-        put (i+1, setDiagonal i arr)
-        loop
-      else return arr
-{% endhighlight %}
-
-Or the shorter:
 {% highlight haskell %}
 updateArray :: IntArray -> IntArray
 updateArray arr = evalState loop (1, arr)
