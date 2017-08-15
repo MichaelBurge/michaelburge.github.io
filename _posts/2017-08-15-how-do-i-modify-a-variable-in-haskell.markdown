@@ -213,7 +213,7 @@ The line `let _ = arr :: IOArray (Int,Int) Integer` is a way of giving a type si
 
 People have written immutable, mutable, contiguous, automatically-parallelized, GPU-accelerated, and other types of arrays. It's always a good idea to choose the right data structure when writing a program in any language.
 
-In general, not every useful data structure automatically comes with a mutable variant. You can always write one yourself, but for the rest of this article we'll assume the array is immutable so that you can use techniques here more generally.
+In general, not every useful data structure automatically comes with a mutable variant. You can always write one yourself, but for the rest of this article we'll assume the array is immutable so that you can use the techniques here more generally.
 
 ## Mutable References
 
