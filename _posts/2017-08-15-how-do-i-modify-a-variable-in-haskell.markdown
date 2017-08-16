@@ -921,10 +921,10 @@ All-in-all, it's not the most elegant, but it gets the job done.
 
 You've seen a lot of different ways to do the same thing. Hopefully some of them are new, and help you port your own imperative thinking and code over to Haskell. Send me a message on Twitter if this helped at all.
 
-The best one is probably this:
+The best one-liner to create the array is probably this:
 {% highlight haskell %}
-updateArray :: IntArray -> IntArray
-updateArray arr = arr // [((i,i), 1) | i <- [1..size] ]
+identity :: IntArray
+identity = array ((1,1),(1,1)) [ ((i,j), if i == j then 1 else 0 | i <- [1..size], j <- [1..size]) ]
 {% endhighlight %}
 
 * Thanks to [Tome Jaguar](https://news.ycombinator.com/item?id=15017853) for the concept and code used in the __Mutable Arrays__ section!
