@@ -924,7 +924,7 @@ You've seen a lot of different ways to do the same thing. Hopefully some of them
 The best one-liner to create the array is probably this:
 {% highlight haskell %}
 identity :: IntArray
-identity = array ((1,1),(1,1)) [ ((i,j), if i == j then 1 else 0 | i <- [1..size], j <- [1..size]) ]
+identity = array ((1,1),(10,10)) [ ((i,j), if i == j then 1 else 0) | i <- [1..size], j <- [1..size] ]
 {% endhighlight %}
 
 * Thanks to [Tome Jaguar](https://news.ycombinator.com/item?id=15017853) for the concept and code used in the __Mutable Arrays__ section!
