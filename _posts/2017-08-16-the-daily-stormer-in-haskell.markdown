@@ -1,24 +1,20 @@
 ---
 layout: post
 author: Michael Burge
-title: "The Daily Stormer, in Haskell"
+title: "The Daily Stormer: A Hurricane Alerting Service"
 started_date: 2017-08-16 02:00:00 -0700
 date: 2017-08-16 10:00:00 -0700
 tags:
   - haskell
 ---
 
-America is under attack from outside forces that resist our control. The 13-year rolling average of killings in New Orleans alone is up compared to 20 years ago[1], where just last week a State of Emergency[2] has been called.
+With the declining popularity of television and radio, young people are less likely to tune in to official government-run alert systems. At any moment, they may be overrun by surprise flash floods that their older, wiser fellow citizens avoided by paying attention to the news.
 
-The Daily Stormer aims to be the final solution to the ignorance plaguing our country. White people are being run out of their homes[3], while our politicians do nothing. It's time to take this problem into our own hands.
-
-I talk of course about hurricanes. With the declining popularity of television and radio, young people are less likely to tune in to official government-run alert systems. At any moment, they may be overrun by surprise flash floods that their older, wiser fellow citizens avoided by paying attention to the news.
-
-This article will cover the development of software that reads a weather-reporting API, and posts automated alerts to a website and Discord bot.
+This article will show how one can use Haskell to read a government hurricane feed, and post automated alerts to a website and Discord bot. We'll name it The Daily Stormer, since a good domain name has recently opened up.
 
 ## The Data
 
-Official government sources are generally best, but they aren't the easiest to interface with. No problem: I take all of these slings and arrows gladly, so that we can have our country back.
+Official government sources are generally best, but they usually aren't the easiest to interface with.
 
 The [National Hurricane Center](http://www.nhc.noaa.gov/aboutrss.shtml) appears to have a few dynamic "Trouble Cyclone Feeds" that we can use. Here is a complete Haskell program to download and parse them:
 
@@ -80,9 +76,9 @@ Here's how the program will be structured:
 
 ## Networking
 
-Back in the wild '90s, we wouldn't really use frameworks or libraries. We'd just sort of open a socket to the outside world, and occasionally people would send us messages. We here at the Daily Stormer long for a simpler time, but we've also learned a thing or two about letting just anyone in. We need strong borders against the outside world for security purposes, and the people managing [`warp`](https://hackage.haskell.org/package/warp-3.2.13) have built a fine type-checked wall to keep out ne'er-do-wells.
+Back in the wild '90s, we wouldn't really use frameworks or libraries. We'd just sort of open a socket to the outside world, and occasionally people would send us messages. At the other end of the spectrum are full-blown web frameworks, with templating languages and connection pools.
 
-`warp` only handles HTTP. Haskell has full-blown web-frameworks too, even ones written by the same people that work on `warp`. But we're not going to use those here.
+[`warp`](https://hackage.haskell.org/package/warp-3.2.13) is a good choice to use for the HTTP layer here.
 
 Recall that we needed components:
 * To initialize some global state
@@ -186,7 +182,7 @@ fetchAlerts = do
   return $ S.fromList titles
 {% endhighlight %}
 
-The original code threw an exception when it encountered a parsing error. If the URLs started returning slightly different feeds, the resulting errors could crash our program and expose us to potential government censorship, which the Daily Stormer stands against. So we instead silently drop URLs that don't parse or match our pattern.
+The original code threw an exception when it encountered a parsing error. I've changed it to instead silently drop when it doesn't parse or match our pattern.
 
 Our service will update its alerts, but we need to calculate differences in order to warn people of new hurricanes. We'll do that in the timer:
 
@@ -269,7 +265,7 @@ discordListener :: Chan String -> String -> IO ()
 discordListener chan alert = writeChan chan alert
 {% endhighlight %}
 
-The bot needs to persistently wait in someone's Discord channel, so we fork off another thread for it(that's at least 3 threads in total now). We need to pass alerts to the bot when we find them, so we create a `Chan String` and add it to our global state.
+The bot needs to persistently wait in someone's Discord channel, so we fork off another thread for it(that's at least 3 threads in total now). We need to pass alerts to the bot when we find them, so we create a [`Chan String`](https://hackage.haskell.org/package/base-4.10.0.0/docs/Control-Concurrent-Chan.html) and add it to our global state. The listener will write messages to the channel, while the bot will be in a loop reading messages from the channel.
 
 `discord-hs` uses [`Pipes`](https://hackage.haskell.org/package/conduit) in its example code; it's another Haskell library. The problem that `pipes` solves is that we have all of these APIs and databases and web services and scrapers and files floating around. We want to hook them all together, but there's sockets and connection pools and caching layers and other complexities that need to be initialized and destroyed that get in the way. `pipes` or its competitors `conduit` and `machines` are all good choices to use for this. He's probably using `pipes` to store an HTTP session cookie.
 
@@ -337,10 +333,4 @@ If you wanted to build out a full website, you might try using an actual web fra
 
 ## Conclusion
 
-We've taken a hard look at the serious hurricane problem in the US, and presented a foundation for how one might build an alerting service to warn people of impending storms. Unfortunately, funding ran dry partway through development, so we've left the code on [Github](https://github.com/MichaelBurge/daily-stormer).
-
-## References
-
-* [1] https://en.wikipedia.org/wiki/Effects_of_Hurricane_Katrina_in_New_Orleans
-* [2] https://www.washingtonpost.com/national/the-latest-state-of-emergency-declared-in-new-orleans/2017/08/10/5258944e-7df7-11e7-b2b1-aeba62854dfa_story.html
-* [3] https://en.wikipedia.org/wiki/Demographics_of_Florida
+We've presented a foundation for how one might build an alerting service to warn people of impending storms. Unfortunately, funding ran dry partway through development, so we've left the code on [Github](https://github.com/MichaelBurge/daily-stormer).
