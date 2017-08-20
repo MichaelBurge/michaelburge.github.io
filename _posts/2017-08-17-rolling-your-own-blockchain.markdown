@@ -184,7 +184,7 @@ serialize = encode
 
 I only included `deserialize` and `serialize` to make it clearer what the end result of this module is. Let's drop them in favor of `decode` and `encode` from `Data.Binary`.
 
-`Generic` is a way of converting a value into a very lightweight "syntax tree" that can be used be serializers(JSON, XML, Binary, etc.) and many other typeclasses to provide useful default definitions. The [Haskell wiki](https://wiki.haskell.org/GHC.Generics) has a good overview. `binary` uses these `Generic` instances to define serializers that work on just about anything.
+`Generic` is a way of converting a value into a very lightweight "syntax tree" that can be used by serializers(JSON, XML, Binary, etc.) and many other typeclasses to provide useful default definitions. The [Haskell wiki](https://wiki.haskell.org/GHC.Generics) has a good overview. `binary` uses these `Generic` instances to define serializers that work on just about anything.
 
 We had to hand-write a `Binary` instance for `HaskoinHash` because `Digest SHA1` from the `Crypto.Hash` library didn't provide it or a `Generic` instance. That's okay - digests are pretty much bytestrings anyways, so it was only a few lines.
 
