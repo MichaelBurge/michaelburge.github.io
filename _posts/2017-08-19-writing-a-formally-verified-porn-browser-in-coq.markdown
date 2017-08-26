@@ -142,12 +142,14 @@ Axiom untag_image     : forall (db : ImageDb) (img : ImageId) (cat : CategoryId)
 
 This is similar to using `undefined` in Haskell for placeholders. In fact, that's pretty much what the `Extraction` command generates:
 {% highlight haskell %}
+newDb           :: ImageDb
 create_image    :: ImageDb -> Image -> ImageDb
 find_categories :: ImageDb -> (List CategoryId) -> List Image
 delete_image    :: ImageDb -> ImageId -> ImageDb
 tag_image       :: ImageDb -> ImageId -> CategoryId -> ImageDb
 untag_image     :: ImageDb -> ImageId -> CategoryId -> ImageDb
 
+newDb           = Prelude.error "AXIOM TO BE REALIZED"
 create_image    = Prelude.error "AXIOM TO BE REALIZED"
 find_categories = Prelude.error "AXIOM TO BE REALIZED"
 delete_image    = Prelude.error "AXIOM TO BE REALIZED"
@@ -177,6 +179,9 @@ Axiom size_increases :
 
 * When we delete an image, either the image was in the database and the count of images decreases by 1, or it wasn't and the count stays the same:
 {% highlight coq %}
+Axiom mem_image :
+  forall (db : ImageDb) (img : ImageId), bool.
+
 Axiom size_decreases :
   forall (db : ImageDb) (img : ImageId),
     (Is_true (mem_image db img) /\ N.succ (num_images (delete_image db img)) = num_images db) \/
