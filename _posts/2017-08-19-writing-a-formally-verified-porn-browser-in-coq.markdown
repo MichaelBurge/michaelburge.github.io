@@ -3,29 +3,25 @@ layout: post
 author: Michael Burge
 title: "Writing a Formally-Verified Porn Browser in Coq and Haskell"
 started_date: 2017-08-19 05:19:00
-date: 2017-08-19 05:19:00
+date: 2017-08-25 18:35:00
 tags:
   - coq
   - haskell
+  - javascript
 ---
 
-It's not common to use formal verification in most software development. Most developers are unfamiliar with the tools and techniques, or assume they're only for specialized use.
+It's uncommon to use formal verification when developing software. Most people are unfamiliar with the tools and techniques, or assume they're only for specialized use.
 
 This article will show how to write a simple image browser with:
 * Core data structures and operations formally verified using the Coq theorem prover.
 * A Haskell web server that handles HTTP requests
 * An HTML/CSS/Javascript frontend
 
-Why this choice of topic? Two reasons:
-
-* 1. It's closer to what most developers are actually working on, compared to e.g. yet another compiler
-* 2. Someone referred to one of my other articles as "mental masturbation"
-
 ## Definitions
 
 We're going to make an image browser. It's an unspoken truth that most large image databases people have are actually porn collections, so we'll be honest with ourselves and call it a porn browser.
 
-We'll have Coq-verified data structures and operations, which some Haskell will use later on to generate HTML. Specifically, we need the ability to:
+We'll have Coq-verified data structures and operations, which some Haskell will use later on to respond to HTTP requests. Specifically, we need the ability to:
 
 * Add new images to the database
 * Get a sorted list of images by date added, or category
@@ -33,9 +29,8 @@ We'll have Coq-verified data structures and operations, which some Haskell will 
 * Add a category to an image
 * Remove a category from an image
 * Add categories
-* Delete categories
 
-We'll use a map from "image id" to all of its metadata, and a list of sets for each category:
+Here are the major types:
 
 {% highlight coq %}
 Require Import Ascii.
@@ -171,6 +166,8 @@ Axiom count_empty_db :
   num_images newDb = N.zero.
 {% endhighlight %}
 
+`count_empty_db` is the invariant here; `num_images` is a helper function we'll define later.
+
 * Whenever we add an image to the database, the number of images should increase by 1:
 {% highlight coq %}
 Axiom size_increases :
@@ -229,9 +226,9 @@ Definition create_image (db : ImageDb) (img : Image) :=
 {% endhighlight %}
 
 You can test it with the `Compute` command:
-{% raw %}
+{% highlight c %}
 Compute create_image newDb (mkImage 0 "testing" 0).
-{% endraw %}
+{% endhighlight %}
 
 which prints:
 {% raw %}
@@ -330,7 +327,7 @@ Fixpoint untag_image (db : ImageDb) (img : ImageId) (cat : CategoryId) : ImageDb
 
 ## Theorems
 
-We're almost ready to prove some theorems. Let's implement the helper functions in their definition:
+We're almost ready to prove some theorems. Let's implement those helper functions we deferred:
 {% highlight coq %}
 Fixpoint num_images (db : ImageDb) : nat := M.cardinal (images db).
 Fixpoint mem_image (db : ImageDb) (img : ImageId) : bool := M.mem img (images db).
@@ -375,13 +372,13 @@ count_empty_db = __
 
 You can't do it - Haskell's type system isn't powerful enough to handle theorem proving. Roughly, things that can be extracted into living, breathing computer code lie in Coq's `Set`; while the world of theorems and proofs is Coq's `Prop`. And the classic tripup for beginners is "bool vs. Prop"
 
-A `bool` is decidably `true` or `false. A `bool` when extracted is going to live on the system heap, where mangy C code can go muck with its bits. A `bool` has a bitstring representation.
+A `bool` is decidably `true` or `false`. A `bool` when extracted is eventually going to live on the system heap. A `bool` has a bitstring representation.
 
 A `Prop` is a statement in an intuitionist logic. In classical logic, you know for any proposition `P`, that `P | ~P`. You can actually add that axiom to Coq, but it's fundamentally not constructive: Just because you've excluded the possibility of `~P` doesn't mean that you can physically instantiate a bitstring representing a specific `P` in memory somewhere.
 
 Inductive types like `bool` are __closed__. There are only 2 constructors `true` and `false`, and if you've excluded `true` you know it's `false`.
 
-Propositions are __open__ world: You can't conclude a positive from a negative.
+Propositions are __open__ world: You can't conclude a positive from a bunch of negatives.
 
 Let's try the next one:
 {% highlight coq %}
@@ -390,16 +387,9 @@ Theorem size_increases :
     num_images (create_image db img) = num_images db + 1.
 {% endhighlight %}
 
-This theorem is actually false! The key point is that all of **our** functions should be safe, but anyone can call `mkImageDb` with a `next_id` that overlaps an existing image. Then, calling `create_image` would overwrite it, and `num_images` wouldn't change.
+This theorem is actually false! All of **our** functions should be safe, but anyone can call `mkImageDb` with a `next_id` that overlaps an existing image. Then, calling `create_image` would overwrite it, and `num_images` wouldn't change.
 
-So we need to prove something similar: That a new database is safe, and that none of our functions violate this safety guarantee. In Haskell, it's important to exclude invalid states at the type-level because then the obvious theorems are automatically true. In Coq, we can paper over the issue by proving the invariant.
-
-First we need to import `Prop`s relating to finite sets. A `Functor` here is something you apply to an implementation to get the propositions("facts", "properties") related to that implementation.
-{% highlight coq %}
-Require Import Coq.FSets.FMapFacts
-(* Earlier: Module M := FMapAVL.Make(N_as_OT). *)
-Module MF := Facts M.
-{% endhighlight %}
+Se we need to specify that this theorem only holds for `InternallyConsistent` databases, and that all of our operations preserve this property.
 
 The only consistency check we'll have for now is that `next_id` should not exist in the `images` map:
 {% highlight coq %}
@@ -422,8 +412,12 @@ Qed.
 
 That was easy because `InternallyConsistent` is a property of the indices in the `images` map. In `newDb`, the map is empty so the statement is vacuously true.
 
-I'll pick one more interesting one before moving on. The remaining proofs are in the [Github](https://github.com/MichaelBurge/pornview) repository:
+I'll pick one more interesting one before moving on. 
 {% highlight coq %}
+Require Import Coq.FSets.FMapFacts
+(* Earlier: Module M := FMapAVL.Make(N_as_OT). *)
+Module MF := Facts M.
+
 Theorem preserves_consistency_2 :
   forall (db : ImageDb) (img : Image),
     InternallyConsistent db -> InternallyConsistent (create_image db img).
@@ -446,13 +440,19 @@ Proof.
 Qed.
 {% endhighlight %}
 
+Recall that `images` is a finite map. We import all of the propositions relating to finite maps using the `Facts` functor, applied to the FMapAVL implementation we instantiated earlier.
+
+Here's the idea of the proof in words:
+
 `MF.add_in_iff` says that "If you add an element to a map, any element in the new map was either already in the map or had the same key as the one we added.". If it was already in the map, then the `InternallyConsistent` hypothesis already applies to it. Otherwise, the key we added was exactly `next_id`, and the definition of `InternallyConsistent` gives `next_id db < succ (next_id db)` after we increment it in `create_image`.
+
+Full proofs for the theorems are in the [Github](https://github.com/MichaelBurge/pornview) repository.
 
 ## Haskell Server
 
 Coq allows us to map inductive types directly to Haskell. There are a few built-in modules for strings, and I'll include examples for `list` and `option` also:
 
-{% highlight coq %}
+{% raw %}
 From Coq Require Import
      extraction.ExtrHaskellString
      extraction.ExtrHaskellNatInteger
@@ -462,7 +462,7 @@ Extract Inductive list    => "[]" ["[]" "(:)"].
 Extract Inductive option => "Prelude.Maybe" ["Prelude.Just" "Prelude.Nothing"].
 Extraction Language Haskell.
 Extraction "Database" Database.
-{% endhighlight %}
+{% endraw %}
 
 Once we set the extraction options and run the `Extraction` command, we'll end up with a `Database.hs` file that can be imported by our Haskell code.
 
@@ -481,23 +481,31 @@ data ServerState = ServerState {
   state_categories :: TVar (M.Map String DB.N)
   }
 
-type PageT a = (?state :: ServerState, ?req :: Request, ?respond :: Response -> IO ResponseReceived) => a -> IO ResponseReceived
+type PageT a = (
+     ?state :: ServerState,
+     ?req :: Request,
+     ?respond :: Response -> IO ResponseReceived)
+     => a -> IO ResponseReceived
 type Page = PageT ()
 
 main :: IO ()
 main = do
   state <- initialize
-  run pv_port $ \req respond -> let ?state = state; ?req = req ; ?respond = respond in do
-    putStrLn (show req)
-    case (pathInfo req, requestMethod req) of
-      ([], "GET") -> pageIndex ()
-      ("static" : xs, "GET") -> pageStatic $ T.unpack $ T.intercalate "/" xs
-      ("images" : imageId : _, "GET") -> pageImage $ param_n imageId
-      ("api" : "listCategories" : _, "GET") -> pageListCategories ()
-      ("api" : "listImages" : _, "GET") -> pageListImages ()
-      ("api" : "tagImage" : imageId : catName : _, "POST") -> pageTagImage (param_n imageId, catName)
-      ("api" : "untagImage" : imageId : catName : _, "POST") -> pageUntagImage (param_n imageId, catName)
-      _ -> respond (W.responseLBS status404 [] "???")
+  run pv_port $ \req respond ->
+      let ?state = state
+          ?req = req
+          ?respond = respond
+      in do
+        putStrLn (show req)
+        case (pathInfo req, requestMethod req) of
+          ([], "GET") -> pageIndex ()
+          ("static" : xs, "GET") -> pageStatic $ T.unpack $ T.intercalate "/" xs
+          ("images" : imageId : _, "GET") -> pageImage $ param_n imageId
+          ("api" : "listCategories" : _, "GET") -> pageListCategories ()
+          ("api" : "listImages" : _, "GET") -> pageListImages ()
+          ("api" : "tagImage" : imageId : catName : _, "POST") -> pageTagImage (param_n imageId, catName)
+          ("api" : "untagImage" : imageId : catName : _, "POST") -> pageUntagImage (param_n imageId, catName)
+          _ -> respond (W.responseLBS status404 [] "???")
 {% endhighlight %}
 
 And here's a fragment of Javascript for interacting with this API:
