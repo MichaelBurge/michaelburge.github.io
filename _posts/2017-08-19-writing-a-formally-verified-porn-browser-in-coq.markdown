@@ -457,7 +457,7 @@ Full proofs for the theorems are in the [Github](https://github.com/MichaelBurge
 
 Coq allows us to map inductive types directly to Haskell. There are a few built-in modules for strings, and I'll include examples for `list` and `option` also:
 
-{% raw %}
+```
 From Coq Require Import
      extraction.ExtrHaskellString
      extraction.ExtrHaskellNatInteger
@@ -467,7 +467,7 @@ Extract Inductive list    => "[]" ["[]" "(:)"].
 Extract Inductive option => "Prelude.Maybe" ["Prelude.Just" "Prelude.Nothing"].
 Extraction Language Haskell.
 Extraction "Database" Database.
-{% endraw %}
+```
 
 Once we set the extraction options and run the `Extraction` command, we'll end up with a `Database.hs` file that can be imported by our Haskell code.
 
