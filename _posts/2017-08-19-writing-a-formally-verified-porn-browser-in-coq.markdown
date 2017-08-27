@@ -212,7 +212,7 @@ Definition newDb := {|
   images  := M.empty Image;
   indices := M.empty Index;
   next_id := N.zero
-  |}
+  |}.
 {% endhighlight %}
 
 * `create_image`
@@ -267,6 +267,12 @@ MkImage {
 {% highlight coq %}
 Fixpoint set_from_list (xs : list N) : Index := fold_right S.add S.empty xs.
 Fixpoint list_from_set (xs : Index) : list N := S.fold cons xs nil.
+
+Fixpoint find_category_ids (db : ImageDb) (cat : CategoryId) : Index :=
+  match M.find cat (indices db) with
+  | None => S.empty
+  | Some xs => xs
+  end.
 
 Fixpoint find_categories_ids (db : ImageDb) (categories : list CategoryId) : Index :=
   match categories with
@@ -327,7 +333,7 @@ Fixpoint untag_image (db : ImageDb) (img : ImageId) (cat : CategoryId) : ImageDb
     images  := images db;
     indices := idxs;
     next_id := next_id db
-  |}
+  |}.
 {% endhighlight %}
 
 ## Theorems
@@ -405,6 +411,10 @@ Definition InternallyConsistent (db : ImageDb) :=
 
 Now we'll prove that `newDb` is internally consistent, using [empty_in_iff](https://coq.inria.fr/library/Coq.FSets.FMapFacts.html).
 {% highlight coq %}
+Require Import Coq.FSets.FMapFacts.
+(* Earlier: Module M := FMapAVL.Make(N_as_OT). *)
+Module MF := Facts M.
+
 Theorem preserves_consistency_1 :
   InternallyConsistent newDb.
 Proof.
@@ -415,14 +425,12 @@ Proof.
 Qed.
 {% endhighlight %}
 
+We import all of the propositions like `empty_in_iff` relating to finite maps using the `Facts` functor, applied to the `FMapAVL` implementation we instantiated earlier.
+
 That was easy because `InternallyConsistent` is a property of the indices in the `images` map. In `newDb`, the map is empty so the statement is vacuously true.
 
 I'll pick one more interesting one before moving on. 
 {% highlight coq %}
-Require Import Coq.FSets.FMapFacts
-(* Earlier: Module M := FMapAVL.Make(N_as_OT). *)
-Module MF := Facts M.
-
 Theorem preserves_consistency_2 :
   forall (db : ImageDb) (img : Image),
     InternallyConsistent db -> InternallyConsistent (create_image db img).
@@ -444,8 +452,6 @@ Proof.
   apply H0.
 Qed.
 {% endhighlight %}
-
-Recall that `images` is a finite map. We import all of the propositions relating to finite maps using the `Facts` functor, applied to the FMapAVL implementation we instantiated earlier.
 
 Here's the idea of the proof in words:
 
