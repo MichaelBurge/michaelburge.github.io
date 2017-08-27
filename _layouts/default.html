@@ -15,9 +15,9 @@
 
     {% include footer.html %}
 
-  </body>
   {% assign javascript_files = site.static_files | where: "javascript", true %}
   {% for file in javascript_files %}
   <script src="{{ file.path }}" async></script>
   {% endfor %}
+  </body>
 </html>
