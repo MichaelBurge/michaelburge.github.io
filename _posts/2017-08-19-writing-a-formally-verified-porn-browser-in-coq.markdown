@@ -568,5 +568,5 @@ Future formal verification articles may cover:
 * Using Idris to develop e.g. a bitcoin exchange
 * Using randomized testing as a cheap substitute for a formal proof.
 
+If you're interested in trying Coq, I recommend starting with Benjamin Pierce's book [Software Foundations](https://softwarefoundations.cis.upenn.edu/current/index.html).
 
-Let me know if you have a particular preference you'd like to see next.
