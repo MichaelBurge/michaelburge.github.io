@@ -3,7 +3,7 @@ layout: post
 author: Michael Burge
 title: "Roll your Own Bitcoin Exchange in Haskell"
 started_date: 2017-08-25 18:51:00
-date: 2017-08-25 18:51:00
+date: 2017-08-31 18:51:00
 tags:
   - haskell
 ---
