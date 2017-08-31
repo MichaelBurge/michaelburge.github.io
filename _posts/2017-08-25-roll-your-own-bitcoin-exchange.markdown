@@ -3,7 +3,7 @@ layout: post
 author: Michael Burge
 title: "Roll your Own Bitcoin Exchange in Haskell"
 started_date: 2017-08-25 18:51:00
-date: 2017-08-25 18:51:00
+date: 2017-08-31 02:37:00
 tags:
   - haskell
 ---
@@ -141,7 +141,39 @@ listOrders = toList
 
 Since the generated `Foldable` instance does `listOrders` for us, I went ahead and implemented it. I'll leave the implementation of `cancelBid` on [Github](https://github.com/MichaelBurge/lambda-exchange).
 
-For `fillBid` and `tryFillMBid`, we'll depend on a generic `matchBid` function that attempts to fill a bid on an `OrderBook` and returns a new `Bid` for whatever couldn't be matched, any `Trade`s that were executed, and the new `OrderBook`:
+For `fillBid` and `tryFillMBid`, we'll write one suitably-generic function for limit orders, and say that a `MarketOrder` is a `LimitOrder` that can't be persisted in the order book, and where the user bids his entire account balance:
+
+{% highlight haskell %}
+fillBid :: Bid -> OrderBook -> ([Trade], OrderBook)
+fillBid bid book = case matchBid bid book of
+  (Nothing, trades, book) ->
+    (trades, book)
+  (Just bidRemainder, trades, book) ->
+    (trades, unsafe_addBid bidRemainder book)
+
+tryFillMBid :: MBid -> Balances -> OrderBook -> (Maybe MBid, [Trade], OrderBook)
+tryFillMBid mbid bals book@OrderBook{..} =
+  case M.lookup _book_toCurrency bals of
+    Nothing -> (Nothing, [], book)
+    Just toBalance ->
+      -- A Market order is a non-persistable limit order with the user bidding his entire balance.
+      let (Tagged MarketOrder{..}) = mbid
+          bid = Tagged $ LimitOrder {
+            _lorder_user = _morder_user,
+            _lorder_fromAmount = _morder_amount,
+            _lorder_toAmount = toBalance
+            }
+      in case matchBid bid book of
+        (Nothing, trades, book) ->
+          (Nothing, trades, book)
+        (Just bid, trades, book) ->
+          (Just $ bidToMbid bid, trades, book)
+
+bidToMBid :: Bid -> MBid
+unsafe_addBid :: Ask -> OrderBook -> OrderBook
+{% endhighlight %}
+
+Our generic `matchBid` function attempts to fill a limit order on the `OrderBook` and returns a new `Bid` for whatever couldn't be matched, any `Trade`s that were executed, and the new `OrderBook`:
 
 {% highlight haskell %}
 matchBid :: Bid -> OrderBook -> (Maybe Bid, [Trade], OrderBook)
@@ -177,6 +209,8 @@ unsafe_addAsk :: Ask -> OrderBook -> OrderBook
 {% endhighlight %}
 
 Here, we repeatedly find the best price `Ask` on the order book, use it to fill our `Bid`, and stop when we run out of qualifying `Ask`s.
+
+
 
 `lowestAsk` is pretty easy since our `Map` is sorted by `price`. I'll define it and `unsafe_addAsk` in the [Github](https://github.com/MichaelBurge/lambda-exchange) repository.
 
