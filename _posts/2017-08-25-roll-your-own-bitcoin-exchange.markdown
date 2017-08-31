@@ -552,7 +552,7 @@ At this point, you can use any combination of the 5 endpoints to change or inspe
 
 We showed how you can implement a simple order book in Haskell, which can be the basis of a full-blown Bitcoin exchange. Future articles may cover:
 
-* Writing the order book in C for efficiency, and using it in the larger Haskell program.
+* Writing the order book in C for efficiency, and using that in the larger Haskell program.
 * Writing a program that watches for actual Bitcoin to be sent, so money can enter our exchange.
 * Using unit tests to validate the order book implementation.
 * Adding multiple currency pairs to the exchange.
