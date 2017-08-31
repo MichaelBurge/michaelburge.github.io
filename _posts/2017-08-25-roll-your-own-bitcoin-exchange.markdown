@@ -21,6 +21,7 @@ We won't work with actual bitcoins or wallets, since they add a lot of complexit
 So what is an order book, really?
 
 First we'll define our orders:
+
 {% highlight haskell %}
 import Data.Tagged
 import qualified Data.Map as M
