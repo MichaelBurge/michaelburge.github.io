@@ -19,7 +19,7 @@ This article will show how you how to:
 
 The `graphviz` package is available [here](https://hackage.haskell.org/package/graphviz), and the final code is available on [Github](https://github.com/MichaelBurge/file-graph).
 
-## Directory Graph
+## Constructing the Graph
 
 A graph is usually described as a collection of __vertices__ and a collection of __edges__ that connect two vertices:
 {% highlight haskell %}
@@ -89,6 +89,8 @@ readDirectoryGraph root = do
 {% endhighlight %}
 
 The output of `readDirectoryGraph` are application-specific Haskell values. We haven't yet used anything from `graphviz`.
+
+## Rendering the Graph
 
 When we render the graph, we'll want to set different colors for files, symlinks, and directories. Here's how we can do that with the labels we saved during the traversal:
 
