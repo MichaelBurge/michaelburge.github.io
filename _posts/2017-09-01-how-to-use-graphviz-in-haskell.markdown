@@ -17,7 +17,7 @@ This article will show how you how to:
 * Render the graph into a .dot file
 * Render the .dot file into an image
 
-The `graphviz` package is available [here](https://hackage.haskell.org/package/graphviz).
+The `graphviz` package is available [here](https://hackage.haskell.org/package/graphviz), and the final code is available on [Github](https://github.com/MichaelBurge/file-graph).
 
 ## Directory Graph
 
