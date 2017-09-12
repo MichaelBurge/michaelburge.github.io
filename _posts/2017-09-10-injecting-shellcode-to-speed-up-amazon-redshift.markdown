@@ -901,7 +901,7 @@ Disassembly of section .text:
   4d:   c3                      retq   
 {% endhighlight %}
 
-So if we jump to the beginning of our shellcode, we will end up in `factorial`. And because `factorial` is a `static` function, I don't believe it is required to be callable with the standard calling convention like `custom_main` is, so it may be unsafe to call.
+So if we jump to the beginning of our shellcode, we will end up in `factorial`. And because `factorial` is a `static` function, I don't believe it is required to be callable with the standard calling convention like `custom_main` is, so a function like it may even be unsafe to call.
 
 Here's how to add an `offset` that we can use to jump to the correct function:
 
