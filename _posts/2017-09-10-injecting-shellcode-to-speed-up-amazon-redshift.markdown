@@ -103,7 +103,8 @@ err = libc.mprotect(code_ptr, size, 0x7)
 if 0 != err:
     raise Exception("mprotect: " + str(code))
 
-fptr = cast(code_ptr, CFUNCTYPE(c_long, c_long))
+fptr = cast(code_ptr, CFUNCTYPE(c_long))
+print fptr()
 libc.free(code_ptr)
 {% endhighlight %}
 
