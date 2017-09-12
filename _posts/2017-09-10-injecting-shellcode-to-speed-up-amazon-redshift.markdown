@@ -1,22 +1,68 @@
 ---
 layout: post
 author: Michael Burge
-title: "Injecting Shellcode to Speed up your Amazon Redshift Queries"
-date: 2017-09-04 12:05:00 -0700
+title: "Injecting a Chess Engine into Amazon Redshift"
+started_date: 2017-09-04 12:05:00 -0700
+date: 2017-09-10 13:00:00 -0700
 tags:
   - c
   - assembly
   - redshift
   - sql
+js_files:
+  - /assets/articles/20170910-redshift/jquery-3.2.1.min.js
+  - /assets/articles/20170910-redshift/chessboardjs-themes.js
+  - /assets/articles/20170910-redshift/chessboard-0.3.0.js
+  - /assets/articles/20170910-redshift/demo-game.js
+css_files:
+  - /assets/articles/20170910-redshift/article.css
+  - /assets/articles/20170910-redshift/chessboard-0.3.0.css
 ---
 
 Amazon Redshift is a SQL-based database with a frontend similar to PostgreSQL. The backend compiles queries to C++ code, which execute against a columnnar datastore. When I last benchmarked it for a former employer, well-tuned queries were about 3-5x slower than hand-rolled C++. But I also uncovered an interesting technique that lets you close that gap for CPU-bound queries.
 
 This article will cover:
-* Using C to write x86-64 shellcode
-* Injecting that shellcode into a running Amazon Redshift database
+* Writing a chess engine in C
+* Turning that C into plain x86-64 instructions
+* Executing those instructions on a running Amazon Redshift database
 
-# The Simplest Example
+## The Result
+
+Here's the first game I successfully played against the engine, on a real Redshift database:
+<div id="demo-game" class="chessboard">
+</div>
+<div class="chessboard-controls">
+  <input type="button" id="previousBtn" value="<<" />
+  <input type="button" id="nextBtn" value=">>" />
+</div>
+
+If you'd like to try it on your live production database, you can simply run the files `create-apply-move.sql` and `create-best-move.sql` in the [Github repository](https://github.com/MichaelBurge/redshift-shellcode/tree/master/sql). These will create two functions `pf_apply_move` and `pf_best_move`.
+
+Both take as input a FEN string representing the board. The initial state of the board is `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`.
+
+* `pf_best_move` takes a FEN string and a search depth, and produces a move with the highest expected score:
+{% highlight sql %}
+# select pf_best_move('4kb1r/p1p2p2/5n1p/2qp2p1/3rp1b1/2P3P1/PPQPBP1P/RNB2KNR w k - 0 1', 3);
+ pf_best_move 
+--------------
+ e2a6
+(1 row)
+{% endhighlight %}
+
+* `pf_apply_move` will produce a FEN string representing the new board after a move:
+{% highlight sql %}
+dev=# select pf_apply_move('4kb1r/p1p2p2/5n1p/2qp2p1/3rp1b1/2P3P1/PPQPBP1P/RNB2KNR w k - 0 1', 'e2a6');                                                                                  
+                           pf_apply_move                           
+-------------------------------------------------------------------
+ 4kb1r/p1p2p2/B4n1p/2qp2p1/3rp1b1/2P3P1/PPQP1P1P/RNB2KNR b k - 0 1
+(1 row)
+{% endhighlight %}
+
+Most moves are 4 characters, and represent the file and rank for the source and destination location. You can specify which promotion a pawn gets by adding `/R, /N, /Q, /B`, so that `a7a8/Q` is a move that moves the pawn on `a7` to `a8` promoting it to a Queen.
+
+Invalid input usually results in an exception being thrown.
+
+### The Simplest Example
 
 Let's take the following C as an example:
 {% highlight c %}
@@ -102,7 +148,7 @@ When is it appropriate to use this? Practically speaking these UDFs are really s
 
 Like a chess engine.
 
-# Chess Engine
+## Chess Engine
 
 A chess engine consists of several components:
 * Board representation
@@ -114,7 +160,7 @@ We're going to write our own chess engine in C, because we have some very restri
 
 ### Board Representation
 
-There are 64 squares on a chess board, and modern Intel CPUS happen to be 64-bit. So we'll use __bitsets__ to represent where each piece is on the board:
+There are 64 squares on a chess board, and modern Intel CPUs are 64-bit. So we'll use __bitsets__ to represent where each piece is on the board:
 {% highlight cpp %}
 // bb is 'bitboard'
 typedef struct gamestate {
@@ -360,7 +406,7 @@ private int num_available_moves(gamestate g)
 }
 {% endhighlight %}
 
-The bitboards make this pretty easy to implement. Here's the strategy:
+The bitboards make this pretty easy to implement. An iterator's job is to find the next available move, so it needs to:
 * Find the piece type
 * Find the specific piece on the board
 * Find a move made by that piece
@@ -369,33 +415,32 @@ The bitboards make this pretty easy to implement. Here's the strategy:
 Here's a direct translation of that:
 {% highlight cpp %}
 typedef struct iterator {
-  int piece_type;
-  uint64_t specific_piece;
-  uint64_t available_moves;
-  int promotion_piece;
+  int piece_type;           // Counts from PIECE_PAWN to 0
+  uint64_t specific_piece;  // Bitset containing all pieces of that type
+  uint64_t available_moves; // Current piece's available moves
+  int promotion_piece;      // Current target's promotion piece
 } iterator;
 {% endhighlight %}
 
-However, we already have the gamestate lying around. We can reuse it to generate some of this:
+The location of the specific piece is the first bit that's set within the `specific_piece` bitboard
 
-* The gamestate has bitboards for every piece type, so if we clear bits when we're done we can pick the first nonzero bitboard
-* The specific piece can be the first bit that's set within a bitboard
+The `gamestate` has bitboards for every piece type, so if we clear bits when we're done we can calculate `piece_type` from the first nonzero bitboard.
 
-Here's what that looks like:
+Here I've unrolled `piece_type` to make it look more like the `gamestate` type:
 {% highlight cpp %}
 typedef struct iterator {
-  uint64_t current_piece_moves_bb;
   uint64_t rooks_bb;
   uint64_t knights_bb;
   uint64_t bishops_bb;
   uint64_t queens_bb;
   uint64_t kings_bb;
   uint64_t pawns_bb;
+  uint64_t current_piece_moves_bb;
   uint64_t promotion_piece;  
 } iterator;
 {% endhighlight %}
 
-One last adjustment: We already have a gamestate when we create the iterator, and it has some of these fields already. I think it's probably a better idea to use the type above, but the real iterator type in my engine is actually a gamestate:
+Since we already have a `gamestate` when we create the `iterator`, I actually reused the data structure to be both. It's probably a better idea to use the 4-element type above, but here's the real `iterator` type from my engine:
 
 {% highlight cpp %}
 typedef struct gamestate {
@@ -536,7 +581,7 @@ int closest_blocker(uint64_t blockers_ray, int direction);
 uint64_t mkRay(int center, int direction);
 {% endhighlight %}
 
-I've omitted the below from this article for brevity. You can find the full implementation on [Github](https://github.com/MichaelBurge/redshift-shellcode).
+I've omitted the below from this article for brevity. You can find the full implementation of these on [Github](https://github.com/MichaelBurge/redshift-shellcode).
 {% highlight cpp %}
 bool is_iterator_finished(iterator x);
 move dereference_iterator(iterator i);
@@ -551,21 +596,23 @@ uint64_t valid_king_moves(gamestate g, int idx);
 uint64_t valid_pawn_moves(gamestate x, int center);
 {% endhighlight %}
 
-Additionally, the above generates "pseudo-legal" moves in `O(1)`: These are moves that could be legal, but require expensive additional information to make a final decision. For example, a king cannot move into check; in general, this requires knowing all possible squares that your opponent can attack, which a naive implementation would do in `O(m)`. Castling and draws add additional restrictions.
+The `iterator` generates "pseudo-legal" moves, with each call to `advance_iterator` being `O(1)`. Pseudo-legal moves are moves that could be legal, but require expensive additional information to make a final decision.
+
+For example, a king cannot move into check. Check detection requires knowing whether the opponent has a pseudo-legal move that attacks the king. My naive implementation applies the move and iterates over all of the opponent's moves to see if any attack the king. Castling has a check detection on as many as 4 squares, and draws also have some restrictions.
 
 Besides the efficiency, psuedo-legal moves can't be merged with legal moves because the rules depend on it. Consider the scenario below:
-* White has an enemy bishop pinned to black's king
-* White moves his king into check from the bishop
-* It is not legal for the black bishop to capture white's king, because it would expose his own king into check
-* However, it is pseudo-legal to capture the king, which is what the check calculation uses.
+<div id="illegal" class="chessboard">
+</div>
 
-{% highlight cpp %}
-TODO: Add a Chess widget here to demonstrate the above situation.
-{% endhighlight %}
+* Black has pinned White's bishop to his king.
+* It is not legal for the white bishop to move to d5, because it leaves his king in check.
+* When testing legality, an engine might apply the move anyways to see if it results in check.
+* After moving to d5, it would not be legal for the black bishop to capture the white king, since it leaves his own king in check.
+* However, it is pseudo-legal for the black bishop to capture the king, which is what the check calculation uses.
 
-An engine that only had the concept of legal moves would contain a bug allowing the white king to move into check.
+An engine that only had the concept of legal moves would thus contain a bug allowing the white king to move into check.
 
-## Move Search
+### Move Search
 
 Besides generating a list of moves, our engine also needs to choose the best one. Suppose we had a function `true_score` that gave us a perfectly accurate rating of the board, in the sense that `true_score(g1) > true_score(g2)` implies that `g1` is more favorable to White than `g2`. Then we could calculate the perfect move as follows:
 
@@ -580,7 +627,7 @@ move best_move(gamestate g, int depth)
   while (! is_iterator_finished(i)) {
     move m = dereference_iterator(i);
     gamestate g_new = apply_move(g, m);
-    int score = true_score(g_new);
+    int score = -true_score(g_new);
     if (score > max) {
       max = score;
       ret = m;
@@ -598,6 +645,8 @@ int true_score(gamestate g);
 iterator mkLegalIterator(gamestate g);
 iterator advance_iterator_legal(gamestate g, iterator i);
 {% endhighlight %}
+
+The minus sign on `true_score` is because it is scoring the opponent's turn.
 
 So the problem reduces to finding a good "score" for a board position. Here's a perfect one:
 
@@ -633,7 +682,6 @@ The idea behind `true_score` is that your last move is either the last move in t
 
 It's not computationally feasible to calculate `true_score`. However, rather than recurse all the way out to checkmate, we could stop after N moves and guess whether we'll be checkmated. The guess could take the form of a negative number, with lower numbers meaning we're more likely to be checkmated. 
 {% highlight cpp %}
-// TODO: Fix the negamax tree search bug and paste its definition here
 const int VALUE_NEGAMAX_START = 0x80000000;
 private int negamax(gamestate g, int depth, int color)
 {
@@ -654,7 +702,7 @@ int evaluate(gamestate g);
 
 Since we only ever take the `maximum` of two scores, the actual score values that `evaluate` returns don't matter at all and only establish an ordering.
 
-#### Evaluation
+### Evaluation
 
 The personality of a chess engine is in the evaluation function. You can make it play more aggressively by raising the score for being able to attack enemy units, or for having pieces in the center.
 
@@ -709,6 +757,7 @@ uint64_t center()
     bit(mkPosition(5,5));    
 }
 
+// A bitset for all possible move destinations.
 uint64_t movepoints(gamestate g);
 int num_legal_moves(gamestate g);
 int num_bits(uint64_t x);
@@ -716,20 +765,21 @@ int num_bits(uint64_t x);
 
 Notice that we've moved `true_score`s checkmate score into `score_availability`.
 
-## Testing
+### Testing
 
-Before we do anything else, we need to be certain we don't have obvious bugs in our engine, like generating invalid moves, missing moves, or having a sign error in our search algorithm. And we certainly don't want any crashing bugs, because we won't get any help debugging issues with the live code. Always remember: If you're doing something really crazy, you want to eliminate as many normal bugs as you can. 
+Before we do anything else, we need to be certain we don't have obvious bugs in our engine, like generating invalid moves, crashes, missing moves, or having a sign error in our search algorithm. And we can't easily debug this code once it's on Redshift.
 
-The two major components are our move generation, and our search algorithm. The search algorithm is tested by unit tests with a few clear-cut initial positions. The move generation is more interesting.
+The two big components are our move generation, and our search algorithm. The search algorithm is tested by unit tests with a few clear-cut initial positions that have one obviously-good move. The move generation is more interesting.
 
 The gold standard for testing move generation is to count the number of states N moves deep from several initial positions, and compare it with known [reference values](https://chessprogramming.wikispaces.com/Perft+Results). Here are the first few:
 
-__TODO: Turn this into a markdown table__
-* 0: 1
-* 1: 20
-* 2: 400
-* 3: 8,902
-* 4: 197,281
+| depth |   leaf nodes |
+|-------|--------------|
+|0      |      1       |
+|1      |      20      |
+|2      |     400      |
+|3      |    8,902     |
+|4      |  197,281     |
 
 The first entry is `1` because there is exactly one possible board when you start a game of chess and don't do anything to it.
 
@@ -739,18 +789,17 @@ The third entry is `400 = 20*20` because black has the same 20 moves as white. S
 
 If it works, you can have great confidence in the correctness of your move generator. But when it inevitably turns up errors, all you get is that an error exists: "Expected 197,281 moves; found 198,303".
 
-You can test this with __divide__, which prints `perft` numbers after each possible move. You compare these numbers with a chess engine that supports `divide`, like [RoceChess](http://www.rocechess.ch/perft.html). That gives you a specific move where the resulting numbers differ, and you can repeat the process with a smaller depth. When the depth is 1, you'll have a move that exists in one chess engine but not the other.
+To debug a __perft__ test failure, you implement __divide__. `divide(n)` calculates `perft(n-1)` for each possible move. If you compare the output of `divide` with another chess engine and find a difference on some move, then checking `perft(n-1)` has reduced the size of your search space. You can repeat `divide` until you find a move that doesn't exist on one of the two engines.
 
-I recommend making every single `perft` failure into a unit test before trying to fix the problem: You'll inevitably want to "optimize" your move generation in the future, and it's much easier to work with small constructive tests compared to full games that a chess engine outputs.
-
+I used [Roce](http://www.rocechess.ch/perft.html) when debugging my chess engine. I recommend writing a unit test whenever `perft` uncovers an error, since you'll inevitably want to "optimize" your move generation later and it's much easier to work with small constructive tests.
 
 With this, we're essentially done with development for now. Now we'll take the result and deploy it onto Amazon Redshift.
 
-# Deployment
+## Deployment
 
-How do we actually get this thing running on Redshift? First we need to get it running locally using a Python script. Then we'll deploy to Redshift and hope for the best.
+How do we actually get this thing running on Redshift? First we need to get it running locally using a Python script. Then we'll deploy it to Redshift using a Python UDF.
 
-## Code Generation
+### Code Generation
 
 Recall the original example used to validate our approach:
 
@@ -774,16 +823,16 @@ Disassembly of section .text:
 {% endhighlight %}
 
 A couple things to note about this:
-* The target `x` is the first symbol, so jumping to the beginning of our shellcode will begin execution there.
-* There are no absolute addresses anywhere, so the code is __Position-Independent__.
-* There is only a single section, which makes it a contiguous block of memory.
-* It uses common instructions that our CPU supports
+* The target `x` is the first symbol, so jumping to the shellcode pointer will begin execution there.
+* There are no absolute addresses.
+* There is only a single section
+* It uses common instructions that our CPU supports.
 
 Lets look at a few examples to see how these assumptions can fail:
 
-### What if the target isn't the first symbol?
+### Using Multiple Symbols
 
-Lets use a recursive function so that lower optimization levels must to emit a symbol for it:
+Lets use a recursive function so that lower optimization levels emit a symbol for it:
 
 {% highlight cpp %}
 // gcc -c -O simple-2.c
@@ -791,7 +840,7 @@ Lets use a recursive function so that lower optimization levels must to emit a s
 int custom_main(int l);
 static int factorial(int x);
 
-// l = 5 implies 1 + 1 + 2 + 6 + 24 = 33
+// l = 5 implies 1 + 1 + 2 + 6 + 24 = 34
 int custom_main(int l) {
   int ret = 0;
   for (int i = 0; i < l; i++) {
@@ -852,7 +901,7 @@ Disassembly of section .text:
   4d:   c3                      retq   
 {% endhighlight %}
 
-So if we jump to the beginning of our shellcode, we will end up in `factorial`. And because `factorial` is a `static` function, I don't believe it is required to be callable with the standard calling convention like `main` is, so it may be unsafe to call.
+So if we jump to the beginning of our shellcode, we will end up in `factorial`. And because `factorial` is a `static` function, I don't believe it is required to be callable with the standard calling convention like `custom_main` is, so it may be unsafe to call.
 
 Here's how to add an `offset` that we can use to jump to the correct function:
 
@@ -894,9 +943,9 @@ print execute()
 * If `offset` is 0, it will invoke `factorial` and print `120`.
 * If `offset` is 26, it will invoke `custom_main` and print 34, which is the sum of `0! + 1! + 2! + 3! + 4!`.
 
-### What if there are absolute addresses?
+### Handling Absolute Addresses
 
-You might think all assembly code either uses relative addresses, or obtains absolute addresses at runtime from the OS. You might think this because a program placed anywhere in memory has no reason to think that any address at all is safe, except possibly a few special addresses near 0 maintained by the kernel.
+You might think all assembly code either uses relative addresses, use hardware or OS-provided absolute addresses, or obtains absolute addresses at runtime from the OS. You might think this because the kernel cannot place programs at fixed locations in memory: If you run a self-modifying program twice, its address space would conflict and the code could not be shared.
 
 Here's a C program to prove that notion wrong:
 {% highlight cpp %}
@@ -940,11 +989,11 @@ This by itself doesn't mean anything, because ELF headers have no meaning when w
 
 Notice the `mov $0x400430,%esi` line. The constant `0x400430` is "backwards" in the actual byte encoding to the left of it: `30 04 40 00`. It's backwards because Intel CPUs use a "little-endian" architecture where the bytes are arranged least-significant to most-significant, while the bits inside each byte are arranged most-significant to least-significant. People are taught in school to write numbers from most-significant to least-significant, so the individual bytes seem correct to us but their order seems backwards.
 
-It's important to look at the actual bytes here because the disassembler will sometimes "lie" to you by converting relative addresses to absolute addresses. The `callq` instruction is not an example of an absolute address, because the bytes `c2 fe ff ff` are actually the signed representation of `-318`. The final executable locates `_printf@plt` exactly 318 bytes before this call instruction, `0x400539 - 400400 = 313`, and the remaining 5 bytes are the `callq` instruction itself.
+It's important to look at the actual bytes here because the disassembler will sometimes "lie" to you by converting relative addresses to absolute addresses. The `callq` instruction is not an example of an absolute address, because the bytes `c2 fe ff ff` are actually the signed integer representation of `-318`. The final executable locates `_printf@plt` exactly 318 bytes before this call instruction, `0x400539 - 0x400400 = 313`, and the remaining 5 bytes are the `callq` instruction itself.
 
 So how does the kernel do this? If we ran two different programs that wanted to start at address `0x400430`, they can't both be physically placed there. However, Intel CPUs have a __Memory Management Unit__ that translates __virtual addresses__ into __physical addresses__. The kernel is one step up from our C code, but even it doesn't truly have that level of access: If you run your computer in a virtual machine, the guest OS is behind another layer of indirection with __Extended Page Tables__.
 
-When the kernel loads this ELF file and grants it a PID, it uses the MMU to map `0x400430` to a real address that we don't have access to. The real address space is mounted at `/dev/mem`, which only root can access. It's also available as a core dump in `/proc/kcore` so that you can use tools like `gdb` to debug the kernel.
+When the kernel loads this ELF file and grants it a PID, it uses the MMU to map `0x400430` to a real address that we don't have access to. The kernel-visible address space is mounted at `/dev/mem`, which only root can access. It's also available as a core dump in `/proc/kcore` so that you can use tools like `gdb` to debug the kernel.
 
 Having any absolute addresses - even virtual ones - is a huge problem for us, because we haven't told the Linux kernel running Amazon Redshift to map our shellcode at address `0x400430`. We can resolve this in two ways:
 
@@ -962,8 +1011,11 @@ typedef int (*shellcode_t)();
 long custom_main() { return ((shellcode_t)0x400000)(); }
 {% endhighlight %}
 
-Here, `custom_main` is our intended entry point. It calls the function at absolute address `0x400000` and passes the return value along. We want to map `y` at that address for this to work.
+Here, `custom_main` is our intended entry point. It calls the function at absolute address `0x400000` and passes the return value along.
 
+My `python` happens to have its own entry point at `0x49d9b0`, which is somewhat close to the desired absolute address. If it overlapped `0x400000`, we would not easily be able to use Python for our loader. In such a case, we could recompile `python` with a different absolute address or use a loader written in C. See [mmap-test.c](https://github.com/MichaelBurge/redshift-shellcode/blob/master/mmap-test.c) in the Github repository for an example of a loader written in C.
+
+Since there's no conflict, here's how to use `mmap` to assign our shellcode to a specific location in virtual memory:
 {% highlight python %}
 from ctypes import (CDLL, c_long, c_char_p, c_void_p, memmove, cast, CFUNCTYPE, c_uint64, Structure, c_int, c_char, create_string_buffer)
 
@@ -1001,18 +1053,16 @@ print(execute())
 # Prints: 42
 {% endhighlight %}
 
-My `python` happens to have its own entry point at `0x49d9b0`, which is somewhat close to the entry address above. You cannot `mmap` address space that would collide with already-assigned address space. In this case, I recommend writing the loader in C and changing its entry point. See `mmap-test.c` in the Github repository for the C version of this example.
+### Position-Independence
 
-#### Position-Independence
-
-Fussing about with absolute addresses is a real pain. Another possibility is to simply use relative addresses for everything. I'll go through a couple sources that I encountered and show how each can be suppressed:
+The other possibility is to simply use relative addresses for everything. I'll go through a couple sources of absolute addresses that I encountered and show how each can be suppressed:
 * .text.startup
 * Jump tables
 * Data
 
 #### Main symbol
 
-`gcc` sometimes likes to place a function named `main` into its own ELF section. This breaks address continuity with other sections. Here's a simple example:
+`gcc` likes to place any function named `main` into its own ELF section. This breaks address continuity with other sections. Here's a simple example:
 
 {% highlight cpp %}
 // gcc -O2 -c simple-3.c
@@ -1091,7 +1141,7 @@ int custom_main() { return &y;
   17:   c3                      retq   
 {% endhighlight %}
 
-Notice that I used the `static` modifier on `y`. This allows `gcc` to definitely conclude that `y` will not be replaced at link-time with another function with the same name, which allows `-fPIC` to generate an instruction-relative address.
+Notice that I used the `static` modifier on `y`. This allows `gcc` to conclude that `y` will not be replaced at link-time with another function with the same name, which allows `-fPIC` to generate an instruction-relative address.
 
 #### Jump Tables
 
@@ -1114,7 +1164,7 @@ int prime(int n) {
 }
 {% endhighlight %}
 
-Unfortunately, we can't use his code because has placed the jump table within an `.rodata` section and left a relocation in `.text`:
+Unfortunately, `gcc` has placed the jump table within an `.rodata` section and left a relocation in `.text`. The relocation causes a segmentation fault at runtime:
 {% highlight bash %}
 $ objdump -d simple-4.o
 Disassembly of section .text:
@@ -1205,7 +1255,7 @@ $ readelf --relocs simple-4.o
 
 If we want the jump table but don't want the relocations, we can always run a linker to resolve them for us. In a future article, maybe I'll show how one can write a custom linker to resolve simple relocations.
 
-### What about instructions the CPU doesn't support?
+### Unsupported CPU Instructions
 
 Our chess engine uses a lot of bitwise operators to manipulate bitsets. Unfortunately, `gcc` emits a call to a library function even at the highest optimization levels:
 {% highlight cpp %}
@@ -1238,9 +1288,9 @@ int count_bits(unsigned int x) { return __builtin_popcount(x); }
    6:   c3                      retq   
 {% endhighlight %}
 
-Amazon Redshift uses Intel Xeon E5-2670v2 CPUs, so you would set `-march=ivybridge`. By default, my `gcc` emits code for the `x86-64` target, which was originally released in 2000. So make sure you're getting the full benefit of your newer CPU instructions.
+The Amazon Redshift node type that I'm testing on uses Intel Xeon E5-2670v2 CPUs, so you would set `-march=ivybridge`. By default, my `gcc` emits code for the `x86-64` target, whose specification was originally released in 2000. So make sure you're getting the full benefit of your newer CPU instructions.
 
-## Staging
+## Using a Loader for Staging
 
 Once the code has been built and any relocations removed, we'll want to test it locally before we load it into Redshift. Here is the actual entry point for our C code:
 {% highlight cpp %}
@@ -1328,7 +1378,9 @@ dumpPythonBytes bs = case BS.uncons bs of
       BSL.putStr $ BSB.toLazyByteString $ "\\x" <> word8HexFixed b
 {% endhighlight %}
 
-The final SQL is built by pasting its output into the Python loader:
+For testing, I wrote the above output to a file named `shellcode_bytes.py` and included the line `from shellcode_bytes import shellcode, offset` in the Python loader.
+
+The final SQL is built by pasting the above output into the corresponding loader:
 {% highlight python %}
 create or replace function pf_best_move (fen varchar, depth integer) returns varchar stable as $$
 from ctypes import (CDLL, c_long, c_char_p, c_void_p, memmove, cast, Structure, CFUNCTYPE, c_uint64, c_int, create_string_buffer)
@@ -1363,8 +1415,7 @@ return execute()
 $$ language plpythonu;
 {% endhighlight %}
 
-I've checked in the actual SQL that can be pasted in to a live Redshift database:
-https://github.com/MichaelBurge/redshift-shellcode/tree/master/sql
+Check out the [Github](https://github.com/MichaelBurge/redshift-shellcode/tree/master) repository for the full code.
 
 # Conclusion
 
@@ -1380,11 +1431,11 @@ Future chess articles may cover:
 * Using GPUs to accelerate move search
 * More advanced scoring functions
 * Reducing CPU time of my naive implementation by several orders of magnitude
-* Hooking your chess engine into a graphical frontend
+* Using a graphical frontend like Fritz to play against your engine
 * Designing engines for Chinese Chess, Shogi, or other variations
 
 Future database articles may cover:
-* Implementing a PostgreSQL-compatible database
+* Implementing a PostgreSQL-compatible database frontend
 * Implementing a GPU-accelerated database
 * How to design a database schema for efficient queries
 * Using Redshift implementation details to design and optimize queries

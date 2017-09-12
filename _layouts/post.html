@@ -28,6 +28,11 @@ layout: default
   {% endif %}
 </article>
 
-<script type="text/javascript" async
-        src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+{% for file in page.js_files %}
+<script type="text/javascript" src="{{ file }}">
 </script>
+{% endfor %}
+
+{% for file in page.css_files %}
+<link rel="stylesheet" href="{{ file}}">
+{% endfor %}

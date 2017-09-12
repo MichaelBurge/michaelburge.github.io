@@ -135,7 +135,7 @@ dot files.dot -Tpng > files.png
 {% endhighlight %}
 
 And here's the final result:
-![Directory tree](/assets/images/20170901-files.png)
+![Directory tree](/assets/articles/20170901-graphviz/files.png)
 
 This is the corresponding directory structure:
 {% highlight bash %}
