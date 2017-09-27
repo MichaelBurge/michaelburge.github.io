@@ -32,6 +32,10 @@ defaults:
       path: "assets/javascripts"
     values:
       javascript: true
+  - scope:
+      path: "_posts"
+    values:
+      bio: 'Michael Burge helps companies efficiently process their large datasets. This includes everything from database and schema design for new projects, problem diagnosis and repair for existing projects hitting scaling limits, and even bespoke SQL compilers and databases for exceptionally difficult cases. <a href="mailto:michaelburge@pobox.com">Hire Michael</a> to benefit from his extensive knowledge and experience.'
 # Exclude from processing.
 # The following items will not be processed, by default. Create a custom list
 # to override the default setting.
