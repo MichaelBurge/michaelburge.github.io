@@ -149,6 +149,7 @@ x y_cast_x(y _y) {
   x _x;
   _x.n = _y.n;
   _x->_xvt = yvtable_cast_xvtable(_y->_xvt);
+  return _x;
 }
 
 void all_funcs_x(x _x) {
