@@ -1,25 +1,26 @@
 ---
 layout: post
 author: Michael Burge
-title: "Write your Ethereum Contracts in Pyramid Scheme"
+title: "Write your next Ethereum Contract in Pyramid Scheme"
 started_date: 2017-10-21 17:34:00 -0700
 date: 2017-11-28 14:34:00 -0700
 tags:
+  - racket
   - scheme
   - ethereum
 ---
 
-Haskell programmers code in ivory towers with their heads in the cloud. In this multi-part article series, we'll get our feet wet diving deep below C level.
+Haskell programmers often code in ivory towers with their heads in the cloud. In this multi-part article series, we'll get our feet wet diving deep below C level.
 
-I create __Pyramid__: A dialect of the Scheme programming language that targets the Ethereum Virtual Machine(EVM). Pyramid Scheme's implementation language makes me a [Racketeer](http://racket-lang.org/). The implementation used here is 3512 lines of code, and includes code from [Structure and Interpretation of Computer Programs](https://mitpress.mit.edu/sicp/full-text/book/book-Z-H-35.html#%_sec_5.5).
+I create __Pyramid__: A dialect of the Scheme programming language that targets the Ethereum Virtual Machine(EVM). Pyramid Scheme is implemented using the appropriately-named [Racket](http://racket-lang.org/). The Pyramid compiler is currently 3512 lines of code, and includes code from [Structure and Interpretation of Computer Programs](https://mitpress.mit.edu/sicp/full-text/book/book-Z-H-35.html#%_sec_5.5).
 
-This article covers the high-level design of the Pyramid compiler. I document the compiler's components and Pyramid's runtime environment.
+This article covers the high-level design of the Pyramid compiler: The compiler's components and Pyramid's runtime environment.
 
-People interested in Scheme, compilers, or Ethereum will enjoy this series. At the end of it, I'll use Pyramid to take preorders for a new book: __Destabilizing Nation States with Math: An Ethereum Hacker's Handbook__. Readers are encouraged to subscribe to the mailing list to receive new articles.
+People interested in Scheme, compilers, or Ethereum will enjoy this series. At the end of it, I'll use Pyramid to take preorders for a new book: __Destabilizing Nation-states with Math: An Ethereum Hacker's Handbook__. Readers are encouraged to subscribe to the mailing list to receive new articles.
 
 ## Overview
 
-The Pyramid compiler turns plain text into executable EVM code. The 5 components are:
+The Pyramid compiler turns plain text into executable EVM code. Its 5 components are:
 
 * __Parser__: Converts plain text into an AST. Racket makes this easy with its [read](https://docs.racket-lang.org/reference/Reading.html#%28def._%28%28quote._~23~25kernel%29._read%29%29) built-in.
 * __Compiler__: The [SICP Scheme compiler](https://mitpress.mit.edu/sicp/full-text/book/book-Z-H-35.html#%_sec_5.5) targets an abstract machine with 5 registers, 8 operations, a stack, and 13 built-in operations.
@@ -37,7 +38,7 @@ An example Pyramid program is
  (factorial 5))
 {% endhighlight %}
 
-. The Pyramid compiler outputs a long hexadecimal string, which can be deployed to a real Ethereum blockchain using the Web3 library:
+. The Pyramid compiler outputs a long hexadecimal string, which can be deployed to a real Ethereum blockchain using the [Web3](https://github.com/ethereum/web3.js/) library:
 {% highlight javascript %}
 var from = "0x0703722a41e9ec7a0497043380a3cc6b16eb242d";
 var code = "The output of the Pyramid compiler";
@@ -87,13 +88,13 @@ x
 (square 5)
 {% endhighlight %}
 
-. All other language features are provided by the Pyramid Standard Library, which are Procedure and Variable definitions installed into the program's environment at startup.
+. All other language features are provided by the __Pyramid Standard Library__, which are Procedure and Variable definitions installed into the program's environment at startup.
 
 ## Abstract Machine
 
-After parsing Pyramid, compile it to __Abstract Machine Code__.
+After Pyramid is parsed, it is compiled to __Abstract Machine Code__.
 
-I present examples of each syntax translated to abstract machine code. The compiler is documented in [SICP](https://mitpress.mit.edu/sicp/full-text/book/book-Z-H-35.html#%_sec_5.5).
+I'll show examples of each syntax translated to abstract machine code, before giving the full language. The compiler is documented in [SICP](https://mitpress.mit.edu/sicp/full-text/book/book-Z-H-35.html#%_sec_5.5).
 
 ### Variables
 
@@ -111,7 +112,7 @@ The definition `(define x 1234)` compiles to
 (perform (op 'define-variable! ((const 'x) (reg 'val) (reg 'env))))
 {% endhighlight %}
 
-. The integer `1234` is "boxed", and a pointer to it stored in the `val` register. Plain integers have no type: They could be confused for pointers or symbols. Boxing attaches a type to the value. Boxed values are always pointers.
+. The integer `1234` is __Boxed__, and a pointer to it stored in the `val` register. Plain integers have no type: They could be confused for pointers or symbols. Boxing attaches a type to the value. Boxed values are always pointers.
 
 The primitive operation `define-variable!` takes three arguments: A name to define, a value to set it to, and an environment. The `env` register holds the current environment.
 
@@ -140,12 +141,12 @@ evaluates to `10` because the condition is `true` and 10 is the true branch.
 
 `if` cannot be a standard library procedure, because procedure calls evaluate all arguments. The `if` statement has two branches, but only evaluates one.
 
-`if` compiles to
+That `if` statement compiles to
 {% highlight scheme %}
 ; true is defined as 1
 (assign 'val (op 'lookup-variable-value ((const 'true) (reg 'env))))
 
-; branch skips code depending on test
+; branch skips code depending on the test
 (test (op 'false? ((reg 'val))))
 (branch (label 'false-branch2))
 
@@ -165,7 +166,7 @@ evaluates to `10` because the condition is `true` and 10 is the true branch.
 
 ### Procedures
 
-A Procedure Definition is a Variable Definition set to a Lambda. A Lambda creates a Compiled Procedure, which is a code pointer and an environment. Compiled Procedures are entered by jumping to the code pointer, and exited by jumping to the `continue` register.
+A Procedure Definition is a Variable Definition set to a Lambda. A Lambda creates a __Compiled Procedure__, which is a code pointer and an environment. Compiled Procedures are entered by jumping to the code pointer, and exited by jumping to the `continue` register.
 
 Here is the simplest Procedure Definition:
 {% highlight scheme %}
@@ -221,7 +222,7 @@ An explicit call(or Application) looks like
 
 is longer.
 
-A Procedure can be either a Compiled Procedure created from a Lambda, or a built-in Primitive Procedure. They are currently similar at the EVM level, but may be optimized in the future. For example, Primitive Procedures could pass their arguments on the stack rather than allocating a linked list.
+A Procedure can be either a Compiled Procedure created from a Lambda, or a built-in __Primitive Procedure__. They are currently similar at the EVM level, but may be optimized in the future. For example, Primitive Procedures could pass their arguments on the stack rather than allocating a linked list.
 
 ### Abstract Machine Language
 
@@ -242,8 +243,8 @@ There are 8 instructions:
 4 expressions:
 {% highlight scheme %}
 (label name)   ; The offset of a location in the final EVM bytecode
-(const value)  ; An unboxed integer, symbol, or list of consts
-(reg name)     ; One of `env`, `proc`, `continue`, `argl`, `val`. These are documented in the __Code Generator__ section.
+(const value)  ; An unboxed integer, unboxed symbol, or list of consts
+(reg name)     ; One of `env`, `proc`, `continue`, `argl`, `val`. These are documented in the Code Generator section.
 (op name args) ; One of the Operations below together with its arguments.
 {% endhighlight %}
 
@@ -266,7 +267,7 @@ There are 8 instructions:
 
 ## Code Generator
 
-The Abstract Machine is a good intermediate target. The Code Generator has detailed knowledge of EVM memory, assembly, stack, and storage. It has two responsibilities:
+The Abstract Machine is a good intermediate target, but doesn't know anything about the EVM. The __Code Generator__ has detailed knowledge of EVM memory, instructions, stack, and storage. It has two responsibilities:
 
 * Convert abstract machine code into almost EVM assembly
 * Initialize the environment
@@ -283,7 +284,7 @@ The target EVM pseudo-assembly has these primitives:
 
 The __Serializer__ turns this into deployable bytecode. 
 
-The Code Generator must implement each instruction, expression, and operation in the previous section. The abstract instructions are up to 2 assembly instructions each:
+The Code Generator must implement each instruction, expression, and operation in the previous section. The abstract instructions generally map to a single assembly instruction:
 
 | Abstract | EVM      |
 | ---      | ---      |
@@ -296,7 +297,7 @@ The Code Generator must implement each instruction, expression, and operation in
 | restore  | MSTORE   |
 | perform  |          |
 
-Because abstract instructions evaluate their arguments, the final EVM assembly can be longer than two instructions. The complexity of the code generator is in the expressions.
+Because abstract instructions evaluate their arguments, the final EVM assembly can be longer than zero or one instructions. The complexity of the code generator is in the expressions.
 
 Expressions leave their result on the stack. The expressions are single instructions, except for operations and list constants:
 
@@ -311,17 +312,17 @@ Expressions leave their result on the stack. The expressions are single instruct
 
 Operations use the stack for input and output. Their arguments are themselves expressions, although operations do not take operations as arguments.
 
-Expressions evaluate to plain 256-bit words. They're encoded as To understand how these relate to complex structures like Pairs and Lists, 
+Expressions evaluate to plain 256-bit words: Integers are 256-bits, Symbols are up to 32 8-bit ASCII characters(which totals 256 bits), and everything else is a 256-bit pointer to a dynamically-allocated object.
 
 ### Memory allocation
 
-Allocate memory by increasing the `allocator` register. If the value in `allocator` is `n`, then increasing `allocator` by 32 reserves the memory addresses `[n, n+32)`. Free Memory by decreasing the allocator: You cannot free memory without also freeing all memory allocated after it.
+Memory is allocated by increasing the `allocator` register. If the value in `allocator` is `n`, then increasing `allocator` by 32 reserves the memory addresses `[n, n+32)`. Memory is freed by decreasing the allocator: You cannot free an address without also freeing all address allocated after it.
 
 Pyramid does not use a garbage collector. Complex garbage collectors can have unpredictable gas usage, and there are no long-lived EVM executions. In the future, the Pyramid compiler may optimize memory by freeing dead variables or placing variables on the stack.
 
 Pyramid values are either __Tagged__ or __Untagged__(alternatively, __Boxed__ or __Unboxed__). Untagged values are single 256-bit words that either point to tagged values or temporarily live on the stack. Tagged values are stored in allocated memory.
 
-There are 7 Primitive Types of tagged values:
+There are 7 __Primitive Types__ of tagged values:
 
 | Tag | Name                | Size | Description |
 | --- | ---                 | ---  | ---         |
@@ -335,15 +336,15 @@ There are 7 Primitive Types of tagged values:
 
 A tagged value is a pointer to a `1 + Size` group of 256-bit words. The first word is the type tag from the above table; the rest depend on the type.
 
-Derived types are combinations of primitive types. Documentation uses them to specify which primitive values are valid:
+__Derived Types__ are combinations of primitive types. Documentation uses them to specify which primitive values are valid arguments:
 
 | Name        | Type                          | Description |
 | ---         | ---                           | --- |
 | Any         |                               | Any tagged value |
-| List X      | Nil \| (Pair X List)          | A linked list of pairs. Used to pass function arguments. |
+| List X      | Nil or (Pair X List)          | A linked list of pairs. Used to pass function arguments. |
 | Environment | List Frame                    | Holds all variable bindings |
 | Frame       | Pair (List Symbol) (List Any) | A lexical scope. The __Global Frame__ has the standard library and top-level user-defined variables. |
-| Procedure   | Compiled \| Primitive         | Any callable value |
+| Procedure   | Compiled or Primitive         | Any callable value |
 
 Untagged values have no runtime type information, but are used in these contexts:
 
@@ -367,11 +368,13 @@ Most memory is allocated, but there are some reserved memory locations:
 | 0xe0    | allocator | 0x100                | Next memory address to allocate |
 | 0x100   |           | N/A                  | First allocated memory address |
 
+The initial values of `proc`, `continue`, and `argl` are useful when debugging the compiler. They shouldn't be observable to user code.
+
 ### Initialization
 
 Before the user's code runs, reserved memory locations are set to their initial values and the Pyramid Standard Library is installed.
 
-Everything except `env` writes a constant to memory. `env` first gets an empty Environment, and then the Pyramid Standard Library is installed by defining several Primitive Procedure objects. Pyramid's `define` syntax is similar, so the only novelty is how Primitive Procedures are created.
+Everything except `env` writes a constant to memory. `env` first gets a newly-allocated empty Environment, and then the Pyramid Standard Library is installed by defining several Primitive Procedure objects. Pyramid's `define` syntax could be used for this, except that users don't currently have a way to create Primitive Procedure values.
 
 This article used this example at the beginning:
 {% highlight scheme %}
@@ -391,21 +394,21 @@ This requires 3 standard library functions:
 | *    | Fixnum Fixnum -> Fixnum  | Multiplication |
 | -    | Fixnum Fixnum -> Fixnum  | Subtraction |
 
-A Primitive Procedure is a tagged label. Call one by jumping to the label with two items on the stack: A pointer to an argument list and a return address. The code following the label should:
+A Primitive Procedure is a tagged label. It is called by jumping to the label with two items on the stack: A pointer to an argument list and a return address. The code following the label should:
 
 * Move arguments from the list to the stack
 * Unbox integers
-* Calculate the result by applying the EQ, MUL, or SUB assembly instruction.
+* Apply the EQ, MUL, or SUB assembly instructions
 * Box the result(except for EQ)
 * Jump to the return address
 
-If Pyramid supported inline EVM assembly, then users could define their own Primitive Procedures as a special type of Lambda. This is better than adding primitives to the code generator, because users could remove functions they don't need. Shorter programs are easier to audit.
+If Pyramid supported inline EVM assembly, then users could define their own Primitive Procedures as a special type of Lambda. This is better than adding primitives to the code generator, because users could remove functions they don't need. Shorter programs are easier to audit. Expect to see this implemented in the future.
 
 ### Serializer
 
-Most compiled programs execute on their target platform. The EVM is different in that compiled programs are actually __Program Initializers__. This initializer generates a new program that handles all future transactions and messages.
+Most compiled programs directly execute on their target platform. The EVM is different in that compiled programs are actually __Program Initializers__. This initializer generates a new program that handles all future transactions and messages.
 
-The Pyramid Serializer prepends a __Loader__ to the Pyramid program that returns it:
+The Pyramid Serializer prepends a __Loader__ to the Pyramid program that returns the Pyramid program:
 {% highlight assembly %}
 PUSH programSize
 PUSH afterLoader
@@ -426,14 +429,16 @@ The Serializer also figures out the correct size for pushes without a size: Ethe
 
 In this article, we looked at the high-level design of the Pyramid Scheme compiler. To keep it accessible, I left out the compiler's implementation code. In my next article "Debugging a Compiler Backend with Google Sheets", I'll cover the code generator's implementation, including developing custom debugging tools.
 
+The code is available on [Github](https://github.com/MichaelBurge/pyramid-scheme).
+
 Future Pyramid articles may cover:
 * Optimizations: Lexical addressing, liveness analysis, early unboxing
 * Package Manager: Users will want to share code. EVM languages can have "internal" and "external" modules
-* EVM Tooling: Implement the standard ABI to allow other contract languages and Javascript tooling work with Pyramid
-* Contract Development: I develop a contract to take pre-orders for a book
+* EVM Tooling: Implement the standard ABI to allow other contract languages and Javascript tooling to work with Pyramid
+* Contract Development: Development of a contract that takes pre-orders for a book.
 
 Future Ethereum articles may cover:
-* Security: Conducting a security audit, common pitfalls, programs that find vulnerabilities
+* Security: Conducting a security audit, common pitfalls, vulnerability scanners
 * Contract Libraries: Organizing larger codebases, CALL vs. CALLCODE vs. DELEGATECALL
 * Formal Verification: Get an absolute 100% guarantee that your contracts are free of errors
 * Frontend: Build an ecommerce store using a contract as the backing datastore
