@@ -1,40 +1,62 @@
 ---
 layout: default
 ---
-<article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+<div class="row">
+  <div></div>
+  <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
   
-  <header class="post-header">
-    <h1 class="post-title" itemprop="name headline">{{ page.title | escape }}</h1>
-    <h2 class="post-subtitle">{{ page.subtitle | escape }}</h2>
+    <header class="post-header">
+      <h1 class="post-title" itemprop="name headline">{{ page.title | escape }}</h1>
+      <h2 class="post-subtitle">{{ page.subtitle | escape }}</h2>
+      <p class="post-meta">
+        {% if page.author %}
+        <span itemprop="author" itemscope itemtype="http://schema.org/Person"><span itemprop="name">{{ page.author }}</span></span>
+        {% endif %}
+      </p>
+      
+    </header>
+    
+    <div class="post-content" itemprop="articleBody">
+      {{ content }}
+    </div>
+    
     <p class="post-meta">
-      {% if page.author %}
-      <span itemprop="author" itemscope itemtype="http://schema.org/Person"><span itemprop="name">{{ page.author }}</span></span>
-      {% endif %}
+      Created at: <time datetime="{{ page.date | date_to_xmlschema }}" itemprop="datePublished">
+        {% assign date_format = site.minima.date_format | default: "%b %-d, %Y" %}
+        {{ page.date | date: date_format }}
+      </time>
     </p>
-
-  </header>
-
-  <div class="post-content" itemprop="articleBody">
-    {{ content }}
-  </div>
-
-  <p class="post-meta">
-    Created at: <time datetime="{{ page.date | date_to_xmlschema }}" itemprop="datePublished">
-      {% assign date_format = site.minima.date_format | default: "%b %-d, %Y" %}
-      {{ page.date | date: date_format }}
-    </time>
-  </p>
-
-  {% if page.bio %}
-  <h3 class="bio-header">About the Author</h3>
-  <p class="bio">{{ page.bio }}</p>
-  {% endif %}
-  
-  {% if site.disqus.shortname %}
+        
+    {% if site.disqus.shortname %}
     {% include disqus_comments.html %}
-  {% endif %}
-</article>
-
+    {% endif %}
+  </article>
+  <div class="sidebar">
+    <!-- Begin MailChimp Signup Form -->
+    <link href="//cdn-images.mailchimp.com/embedcode/slim-10_7.css" rel="stylesheet" type="text/css">
+    <style type="text/css">
+      #mc_embed_signup{background:#fff; clear:left; font:14px Helvetica,Arial,sans-serif;}
+    </style>
+    <div id="mc_embed_signup">
+      <form action="https://michaelburge.us11.list-manage.com/subscribe/post?u=33002f22d94488fa0fc81fb72&amp;id=7d28b8e8f3" method="post" id="mc-embedded-subscribe-form" name="mc-embedded-subscribe-form" class="validate" target="_blank" novalidate>
+        <div id="mc_embed_signup_scroll">
+          <label for="mce-EMAIL">Mailing list</label>
+          <input type="email" value="" name="EMAIL" class="email" id="mce-EMAIL" placeholder="email address" required>
+          <!-- real people should not fill this in and expect good things - do not remove this or risk form bot signups-->
+          <div style="position: absolute; left: -5000px;" aria-hidden="true"><input type="text" name="b_33002f22d94488fa0fc81fb72_7d28b8e8f3" tabindex="-1" value=""></div>
+          <div class="clear"><input type="submit" value="Subscribe" name="subscribe" id="mc-embedded-subscribe" class="button"></div>
+        </div>
+      </form>
+    </div>
+    <!--End mc_embed_signup-->
+    {% if page.bio %}
+    <div class="panel">
+    <h3>About the Author</h3>
+    <p>{{ page.bio }}</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
 {% for file in page.js_files %}
 <script type="text/javascript" src="{{ file }}">
 </script>

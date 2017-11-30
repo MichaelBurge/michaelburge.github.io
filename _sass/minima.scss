@@ -16,16 +16,19 @@ $base-line-height: 1.5 !default;
 
 $spacing-unit:     30px !default;
 
-$link-color:       #009900;
-$text-color:       $color-primary-4;
-$background-color: $color-primary-2;
-$well-color:       $color-primary-1;
-$brand-color:      $color-primary-2;
-$nav-color:        $color-primary-2;
 
 $grey-color:       $color-primary-3 !default;
 $grey-color-light: lighten($grey-color, 40%) !default;
 $grey-color-dark:  darken($grey-color, 10%) !default;
+
+$link-color:            #009900;
+$text-color:            $color-primary-4;
+$background-color:      $color-primary-2;
+$well-color:            $color-primary-1;
+$brand-color:           $color-primary-2;
+$nav-color:             $color-primary-2;
+$panel-head-color:      $grey-color;
+$panel-head-text-color: $grey-color-light;
 
 // Width of the content area
 $content-width:    800px !default;

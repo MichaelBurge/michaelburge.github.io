@@ -22,7 +22,7 @@ People interested in Scheme, compilers, or Ethereum will enjoy this series. At t
 The Pyramid compiler turns plain text into executable EVM code. The 5 components are:
 
 * __Parser__: Converts plain text into an AST. Racket makes this easy with its [read](https://docs.racket-lang.org/reference/Reading.html#%28def._%28%28quote._~23~25kernel%29._read%29%29) built-in.
-* __Compiler__: The [SICP Scheme compiler](https://mitpress.mit.edu/sicp/full-text/book/book-Z-H-35.html#%_sec_5.5) targets an abstract machine with 5 registers, 8 operations, a stack, and 12 built-in operations.
+* __Compiler__: The [SICP Scheme compiler](https://mitpress.mit.edu/sicp/full-text/book/book-Z-H-35.html#%_sec_5.5) targets an abstract machine with 5 registers, 8 operations, a stack, and 13 built-in operations.
 * __Code Generator__: Converts the abstract machine code into EVM assembly.
 * __Serializer__: Converts EVM assembly into deployable EVM bytecode.
 * __Debugger__: A Google Sheets script that simulates disassembled EVM bytecode.
