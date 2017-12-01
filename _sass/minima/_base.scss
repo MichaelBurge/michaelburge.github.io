@@ -198,10 +198,12 @@ pre {
         flex: 1;
         margin: 10px;
     }
-    > .grow {
-        display: box;
-        max-width: 45%;
-        flex-grow: 2;
+    @media screen and (min-width: 800px) {
+        > .grow {
+            display: box;
+            max-width: 45%;
+            flex-grow: 2;
+        }
     }
 }
 
