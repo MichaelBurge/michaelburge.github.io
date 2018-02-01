@@ -19,7 +19,7 @@ email: michaelburge@pobox.com
 description: Programming tips, demos, and articles
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "http://www.michaelburge.us" # the base hostname & protocol for your site, e.g. http://example.com
-twitter_username: TaurineAndCode
+twitter_username: TheMichaelBurge
 
 # Build settings
 markdown: kramdown
