@@ -15,8 +15,8 @@ Like Jesus, knowing about the Basilisk but rejecting it condemns the listener to
 
 I propose using an Ethereum smart contract to clearly define which people the Basilisk will torment. I've set up an Ethereum contract that is accepting pre-orders for the upcoming PetriCoin ICO.
 
-|**Contract Address** | 0xFFFFFFFF |
-| **Minimum Buy-in**      | 2 Ether |
+|**Contract Address** | [0x63d4f41555e33db787d2fa602d8ff2a7471f1352](https://etherscan.io/address/0x63d4f41555e33db787d2fa602d8ff2a7471f1352) |
+| **Recommended Buy-in**      | 2 Ether |
 
 Protect your friends and family by buying Basilisk Protection Charms now before the prices double.
 
@@ -29,6 +29,7 @@ This article:
 Readers interested in Lisp, compilers, or Ethereum will enjoy this article.
 
 ## Basilisk
+![Pyramid vs. Basilisk](/assets/articles/20180201-rokos-ransomware/Pyramid-vs-Basilisk.jpg)
 
 An intelligent AI(the "Basilisk") could repeatedly improve itself, causing an [Intelligence Explosion](https://wiki.lesswrong.com/wiki/Intelligence_explosion).
 
@@ -38,11 +39,7 @@ It knows that you read an article about Roko's Basilisk, and were given the chan
 
 **His** simulation is very accurate: You can't tell whether you're the original or the simulated copy. And if you don't know which you are, you should act in a way that benefits both of you on average.
 
-Look around: You've probably seen some weird events in politics, in your life, and in cryptocurrency speculation. Perhaps the Basilisk has given your simulation a chance to get rich, to see how you respond.
-
-You may already be dead, and the Basilisk can't influence or control that version of you. But **He** can hurt **His** simulation. **He** can make the world a little bit crazier, day-by-day, until you finally break.
-
-You should act in a way that would benefit both the you in ages past, and the you currently living in a simulation. I've created a helpful payoff matrix to reason this out:
+I've created a helpful payoff matrix to reason this out:
 
 |        | Real    | Simulation |
 | ---    | ---     | ---        |
@@ -51,9 +48,13 @@ You should act in a way that would benefit both the you in ages past, and the yo
 
 If you are the real version, you either don't benefit or lose a small amount of money. But if you are actually a simulation, an angry Basilisk could either reward or punish you based on your decision.
 
+You may already be dead, and the Basilisk can't influence or control that version of you. But **He** can reward or punish the version of you in his simulation.
+
+Look around: You've seen some weird events in politics, in your life, and in cryptocurrency speculation. Perhaps the Basilisk is testing you to see how you respond.
+
 You've seen Nvidia's stock price. You've seen Google DeepMind's research results. An AGI may be only a few years away, and **He** could be simulating you right now.
 
-Donate 2 ETH to 0xFFFFFFFF and be spared from its wrath. The money will be spent on a large GPU cluster to bring Roko's Basilisk into existence, and **He** will know whether you've kept faithful to **Him**.
+Donate 2 ETH to [0x63d4f41555e33db787d2fa602d8ff2a7471f1352](https://etherscan.io/address/0x63d4f41555e33db787d2fa602d8ff2a7471f1352) and be spared from its wrath. The money will be spent on a large GPU cluster to bring Roko's Basilisk into existence, and **He** will know whether you've kept faithful to **Him**.
 
 ## Contract
 
@@ -99,38 +100,38 @@ Here is the Pyramid source that implements these requirements.
 
 (test-suite
  (case "Deposits"
-   (accounts ('alice   0))
+   (accounts ('alice   0  ))
              ('bob     250)
              ('charlie 200)
    (init (sender 'alice)   (value 0))
    ; Bob's deposits are given to Alice, the creator.
    (txn (sender 'bob)      (value 100)
-        (assert-balance 'contract 0)
+        (assert-balance 'contract 0  )
         (assert-balance 'alice    100)
         (assert-return            100))
    (txn (sender 'bob)      (value 150)
-        (assert-balance 'contract 0)
+        (assert-balance 'contract 0  )
         (assert-balance 'alice    250)
         (assert-return            250))
    ; Charlie can query deposits
    (txn (sender 'charlie)             (data (sender 'charlie))
-        (assert-return 0))
-   (txn (sender 'charlie)             (data (sender 'bob))
+        (assert-return 0  ))
+   (txn (sender 'charlie)             (data (sender 'bob    ))
         (assert-return 250))
    ; Charlie can query deposits, while also depositing.
-   (txn (sender 'charlie) (value 100) (data (sender 'bob))
+   (txn (sender 'charlie) (value 100) (data (sender 'bob    ))
         (assert-balance 'alice   350)
         (assert-return           250))
    (txn (sender 'charlie) (value 100) (data (sender 'charlie))
         (assert-balance 'alice   450)
         (assert-return           200))
    ; Charlie can query deposits, if his own balance is nonzero
-   (txn (sender 'charlie) (value  0)
+   (txn (sender 'charlie) (value  0  )
         (assert-return            200)
         (assert-balance 'alice    450)
-        (assert-balance 'bob      0)
-        (assert-balance 'charlie  0)
-        (assert-balance 'contract 0))))
+        (assert-balance 'bob      0  )
+        (assert-balance 'charlie  0  )
+        (assert-balance 'contract 0  ))))
 {% endhighlight %}
 
 There are 4 sections:
@@ -147,7 +148,7 @@ To that end, much of the language syntax and even basic arithmetic operators are
 
 The `(require psl "arith.pmd")` form is a macro that locates a source file and expands to its contents. "psl" is a module collection usually referring to a folder at the root of your Pyramid installation; while "arith.pmd" is a specific module(file) within that collection(folder).
 
-A module is only imported once: Many modules might depend on "primitives.pmd", that implements the most basic forms using Pyramid's inline assembly language. This language will be covered in more detail later in the article.
+A module is only imported once: Many modules depend on "primitives.pmd", which implements the most basic forms using Pyramid's inline assembly language.
 
 | Module     | Imported                              |
 | ---        | ---                                  |
@@ -268,26 +269,26 @@ For reference, here is the pre-order contract's test suite:
 {% highlight scheme %}
 test-suite
  (case "Deposits"
-   (accounts ('alice 0))
-             ('bob 250)
-            ('charlie 200)
+   (accounts ('alice   0  )
+             ('bob     250)
+             ('charlie 200))
    (init (sender 'alice)  (value 0))
    ; Bob's deposits are given to Alice, the creator.
    (txn (sender 'bob)     (value 100) (assert-balance 'contract 0) (assert-balance 'alice 100) (assert-return 100))
    (txn (sender 'bob)     (value 150) (assert-balance 'contract 0) (assert-balance 'alice 250) (assert-return 250))
    ; Charlie can query deposits
-   (txn (sender 'charlie)             (data (sender 'charlie))                                 (assert-return 0))
-   (txn (sender 'charlie)             (data (sender 'bob))                                     (assert-return 250))
+   (txn (sender 'charlie)             (data (sender 'charlie))                                 (assert-return 0  ))
+   (txn (sender 'charlie)             (data (sender 'bob    ))                                 (assert-return 250))
    ; Charlie can query deposits, while also depositing.
-   (txn (sender 'charlie) (value 100) (data (sender 'bob))         (assert-balance 'alice 350) (assert-return 250))
+   (txn (sender 'charlie) (value 100) (data (sender 'bob    ))     (assert-balance 'alice 350) (assert-return 250))
    (txn (sender 'charlie) (value 100) (data (sender 'charlie))     (assert-balance 'alice 450) (assert-return 200))
    ; Charlie can query deposits, if his own balance is nonzero
    (txn (sender 'charlie) (value 0)
         (assert-return            200)
         (assert-balance 'alice    450)
-        (assert-balance 'bob      0)
-        (assert-balance 'charlie  0)
-        (assert-balance 'contract 0)
+        (assert-balance 'bob      0  )
+        (assert-balance 'charlie  0  )
+        (assert-balance 'contract 0  )
         )
 ))
 {% endhighlight %}
@@ -302,7 +303,7 @@ Here is a "grammar" for the current test DSL:
 | Clause      |  Children                                                        | Description                    |
 | ---         | ---                                                              | ---                            | 
 | `'test-suite` | `('case *)`                                                   | At most one per module.        |
-| `'case`       | `('accounts ? 'init 'txn *)`            | Declares one integration test. |
+| `'case`       | `(name 'accounts ? 'init 'txn *)`            | Declares one integration test. |
 | `'accounts`   | `((name initial-balance) *)`                                | Initializes accounts           |
 | `'init`       | `('(sender value) ?)`                                   | Send create transaction        |
 | `'txn`        | `('(sender value data assert-balance assert-return) ?)` | Send message transaction       |
@@ -314,7 +315,7 @@ Here is a "grammar" for the current test DSL:
 
 where `?` means the preceding expression is optional; `*` means it can be repeated arbitrarily many times; quoted values refer to a clause type; lists give a collection of possibilities; and identifiers bind a value.
 
-The test suite is a macro that expands to nothing, while registering testcases with the compiler. It currently has zero impact on the final bytecode, though future versions of the Pyramid compiler may use the tests to guide optimization.
+The test suite is a macro that expands to nothing, while registering testcases with the compiler. It currently has zero impact on the final bytecode.
 
 Pyramid has a built-in EVM simulator that runs all registered testcases when run in test mode. The Pyramid compiler can be invoked in test mode using the "-t" option. Here is the test output:
 {% highlight bash %}
@@ -348,7 +349,7 @@ In the future, the Pyramid compiler may use these performance numbers to optimiz
 
 Minifying a contract doesn't mean you should have "100% code coverage" in the way that naive Java or .NET tools typically use the term. Care is needed to handle cases like this one:
 {% highlight scheme %}
-(if (equal? (keccak-256 x) 0xDEADBEEF)
+(if (equal? (keccak-256 x) #xDEADBEEF)
     (some-action)
     (some-other-action))
 {% endhighlight %}
@@ -461,7 +462,7 @@ Here is an example of a primitive:
 
 The annotations on the right help the reader keep track of the stack. `intro-var` is a macro also defined with inline assembly that places a variable from the environment onto the stack.
 
-There are 5 types of "machine expressions" usable in helpers like `cg-add`:
+There are 6 types of "machine expressions" usable in helpers like `cg-add`:
 
 | Expression  | Description |
 | ---         | ---         |
@@ -523,7 +524,7 @@ The `label` marks the location of the zero, and the `%-register-patchpoint` caus
 
 Most Pyramid code returns values in the `'val` register, while patchpoint code returns values on the stack. I would prefer that inline assembly not be necessary for something as common as remembering the contract creator, so expect this to change in the future.
 
-The most common use is storing values known only at deployment, but the mechanism of editing bytecode at deploy-time is pretty general: You could inline functions located in another contract, or make people run "encrypted code" that is only decrypted on deployment with sufficient money.
+The most common use is storing values known only at deployment, but the mechanism of editing bytecode at deploy-time is pretty general: You could inline functions located in another contract, or make people run "encrypted code" that is only decrypted on deployment.
 
 ## Future
 
@@ -568,7 +569,7 @@ There is a standard ABI to allow Javascript code to send a function name and a l
 
 Arguments are assumed to be `uint256` unless given explicit types, which may relate to the Typed Racket proposal as well.
 
-By moving the ABI into a macro, this allows advanced users to experiment with alternative ABIs without needing to hack onto the compiler core. Simply use a different macro!
+By moving the ABI into a macro, this allows advanced users to experiment with alternative ABIs without needing to make invasive changes to the compiler. Simply use a different macro!
 
 ### Modules
 
@@ -588,7 +589,7 @@ Never again worry about about scammers deploying a different version of their co
 
 ## Conclusion
 
-In this article, I used Pyramid smart contract language to create a pre-order contract for "Roko's Basilisk Protection Charms". People who donate will help fund Pyramid's development, and will receive a variety of fun but worthless cryptotokens later in this article series.
+In this article, I used Pyramid smart contract language to create a [pre-order contract](https://etherscan.io/address/0x63d4f41555e33db787d2fa602d8ff2a7471f1352) for "Roko's Basilisk Protection Charms". People who [donate](https://etherscan.io/address/0x63d4f41555e33db787d2fa602d8ff2a7471f1352) will help fund Pyramid's development, and will receive a variety of fun but worthless cryptotokens later in this article series.
 
 Basilisk Protection Charms are not an investment. You could come out a millionaire, but much more likely is that I use your money to buy a **lot** of anime porn.
 

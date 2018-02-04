@@ -19,7 +19,9 @@ email: michaelburge@pobox.com
 description: Programming tips, demos, and articles
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "http://www.michaelburge.us" # the base hostname & protocol for your site, e.g. http://example.com
-twitter_username: TheMichaelBurge
+twitter_usernames:
+  - TheMichaelBurge
+  - PyramidLang
 
 # Build settings
 markdown: kramdown
@@ -36,7 +38,7 @@ defaults:
   - scope:
       path: "_posts"
     values:
-      bio: 'Michael Burge does Ethereum contract development and security auditing. He works with leading programming language theorists to design secure reliable software. <a href="mailto:michaelburge@pobox.com">Hire Michael</a> to benefit from his extensive knowledge and experience.'
+      bio: 'Michael Burge is the creator of the Pyramid Scheme contract language for Ethereum. He has extensive experience designing and implementing compilers and data stores.'
 
 # Exclude from processing.
 # The following items will not be processed, by default. Create a custom list

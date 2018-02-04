@@ -224,6 +224,6 @@ pre {
         @include relative-font-size(0.875);
         color: $text-color;
         background-color: $well-color;
-        margin-top: 0;
+        margin: 0 auto;
     }
 }

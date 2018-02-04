@@ -28,11 +28,11 @@
           </li>
           {% endif %}
 
-          {% if site.twitter_username %}
+          {% for username in site.twitter_usernames %}
           <li>
-            {% include icon-twitter.html username=site.twitter_username %}
+            {% include icon-twitter.html username=username %}
           </li>
-          {% endif %}
+          {% endfor %}
         </ul>
       </div>
 
