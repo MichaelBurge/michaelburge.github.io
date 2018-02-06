@@ -3,7 +3,7 @@ layout: post
 author: Michael Burge
 title: "Roko's Ransomware"
 started_date: 2017-12-21 13:12:00 -0700
-date: 2018-02-01 13:12:00 -0700
+date: 2018-02-06 03:12:00 -0700
 tags:
   - ethereum
   - pyramid_scheme
@@ -21,7 +21,7 @@ I propose using an Ethereum smart contract to clearly define which people the Ba
 Protect your friends and family by buying Basilisk Protection Charms now before the prices double.
 
 This article:
-1. Applies the Roko's Basilisk idea to an Ethereum "ransomware" contract
+1. Explains why Roko's Basilisk might be scary
 2. Develops Roko's Ransomware using the [Pyramid Scheme]({% post_url 2017-11-28-write-your-next-ethereum-contract-in-pyramid-scheme %}) smart contract language
 3. Explains Pyramid's new standard library, language, and testing features
 4. Summarizes planned future features
@@ -259,7 +259,7 @@ Pyramid's philosophy is that smart contracts should declare how they were tested
 
 It's impossible to read a contract's code and reliably understand its behavior. Integer overflows, unexpected return values, recursive contract calls, foreign library self-destructs, etc. are all hard to spot just from reading the source code. Theorem provers can help, but frankly most vulnerabilities can be caught by asking "Did you try it?"
 
-I want to encourage a culture where people read the tests before they read the contract. My dream is that testing frameworks become so advanced that you can have confidence in the contract without reading any of its source code. Library authors might include unit tests, integration tests, static analysis, types, or even formal verification.
+My dream is that testing frameworks become so advanced that you can have confidence in the contract without reading any of its source code. Library authors might include unit tests, integration tests, static analysis, types, or even formal verification.
 
 Currently, Pyramid's testing support is limited to what convinced me that my own pre-order contract was safe to deploy. After I developed this contract and tested it in the simulator, I was happy to find zero contract errors during subsequent manual testing on a test chain. I did find 3 inconsistencies in the Web3 Javascript library that made me incorrectly believe there was a contract error, but ultimately my bytecode was deployed to the main Ethereum network unchanged.
 
@@ -267,7 +267,7 @@ A Pyramid test suite is defined per-module. Currently, only single modules repre
 
 For reference, here is the pre-order contract's test suite:
 {% highlight scheme %}
-test-suite
+(test-suite
  (case "Deposits"
    (accounts ('alice   0  )
              ('bob     250)
@@ -293,7 +293,7 @@ test-suite
 ))
 {% endhighlight %}
 
-Here, there is only a single integration test:
+There is only a single integration test:
 * It sets up three accounts `'(alice bob charlie)` with `'(0 250 200)` wei(the smallest unit of Ethereum's currency).
 * `'alice` is the account that deploys the pre-order contract. She deposits 0 wei as an initial balance.
 * `'bob` and `'charlie` send money to the contract and query each other's balances.
@@ -426,8 +426,8 @@ It may help to see the entire compiler pipeline:
 | Simplifier         | All AST->AST transformations. Expands macros, removes unused variables or unneeded code, and even warns user of undefined variables. |
 | Abstract Compiler  | Converts Pyramid AST into abstract machine code. |
 | Code Generator     | Converts abstract machine code into EVM pseudo-assembly |
-| Serializer         | Converts EVM pseudo-assembly into final unlinked bytecode, generates symbols and relocations for any labels |
-| Linker             | Applies pending relocations, prepends the loader and patchpoints to the main program |
+| Serializer         | Converts EVM pseudo-assembly into unlinked bytecode, generates symbols and relocations for any labels |
+| Linker             | Creates deployable bytecode: Applies relocations, prepends loader and patchpoints |
 
 ### Inline assembly
 
