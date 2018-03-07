@@ -68,7 +68,7 @@ Continuations can be used to implement C-style `break`, `continue`, and `return`
         (loop (+ n 1))))))
 {% endhighlight %}
 
-Using `(return ?)` within the body causes the entire`call/cc` to be immediately replaced with `?`.
+Using `(return ?)` within the body causes the entire `call/cc` to be immediately replaced with `?`.
 
 ## Delimited Continuations
 
