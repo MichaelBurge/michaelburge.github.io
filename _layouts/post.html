@@ -8,7 +8,7 @@ layout: default
     {% endif %}
   </div>
   <article class="post grow" itemscope itemtype="http://schema.org/BlogPosting">
-  
+
     <header class="post-header">
       <h1 class="post-title" itemprop="name headline">{{ page.title | escape }}</h1>
       <h2 class="post-subtitle">{{ page.subtitle | escape }}</h2>
@@ -17,20 +17,20 @@ layout: default
         <span itemprop="author" itemscope itemtype="http://schema.org/Person"><span itemprop="name">{{ page.author }}</span></span>
         {% endif %}
       </p>
-      
+
     </header>
-    
+
     <div class="post-content" itemprop="articleBody">
       {{ content }}
     </div>
-    
+
     <p class="post-meta">
       Created at: <time datetime="{{ page.date | date_to_xmlschema }}" itemprop="datePublished">
         {% assign date_format = site.minima.date_format | default: "%b %-d, %Y" %}
         {{ page.date | date: date_format }}
       </time>
     </p>
-        
+
     {% if site.disqus.shortname %}
     {% include disqus_comments.html %}
     {% endif %}
@@ -42,6 +42,7 @@ layout: default
       <p>{% include icon-twitter.html username=username %}</p>
       {% endfor %}
       <p><img style="width: 1.5em; height=1.5em" src="/assets/articles/20171201-pyramid-1/pyramid.png"><a href="https://discord.gg/854RH6x">Join Pyramid Scheme's Discord channel</a><img style="width: 1.5em; height=1.5em" src="/assets/articles/20171201-pyramid-1/pyramid.png"></p>
+      <p>{% octicon mark-github height:16 class:"right left" aria-label:hi %}<a href="https://github.com/michaelburge/pyramid-scheme">Pyramid on Github</a></p>
     </div>
     <div class="mailchimp">
       <!-- Begin MailChimp Signup Form -->
