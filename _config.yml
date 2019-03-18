@@ -21,11 +21,10 @@ baseurl: "" # the subpath of your site, e.g. /blog
 url: "http://www.michaelburge.us" # the base hostname & protocol for your site, e.g. http://example.com
 twitter_usernames:
   - TheMichaelBurge
-  - PyramidLang
 
 # Build settings
 markdown: kramdown
-theme: minima
+#theme: main
 plugins:
   - jekyll-feed
   - jekyll-sitemap
@@ -41,7 +40,7 @@ defaults:
   - scope:
       path: "_posts"
     values:
-      bio: 'Michael Burge has decades of experience developing complex software, including custom compilers, data stores for "big data", and websites. Take advantage of his extensive knowledge and experience; <a href="mailto:michaelburge@pobox.com">Hire Michael</a> for your big project today.'
+      bio: 'Michael Burge has years of experience developing complex software, including custom compilers, data stores for "big data", and improving website performance. Take advantage of his extensive knowledge and experience; <a href="mailto:michaelburge@pobox.com">Hire Michael</a> for your big project today.'
 
 # Exclude from processing.
 # The following items will not be processed, by default. Create a custom list

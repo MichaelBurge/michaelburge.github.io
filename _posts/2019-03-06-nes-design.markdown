@@ -3,7 +3,7 @@ layout: post
 author: Michael Burge
 title: "Implementing a NES Emulator in Rust"
 started_date: 2019-03-06 17:34:00
-date: 2019-03-06 17:34:00
+date: 2019-03-18 13:34:00
 tags:
   - rust
   - nes
@@ -18,16 +18,19 @@ In this article, I'll talk about how I used [Rust](https://www.rust-lang.org/) t
 * Problem Domain: How did I approach the problem of emulating the NES?
 * Language: Did Rust's type system or borrow checker interfere? Were there performance issues?
 
+* This list is replaced with the Table of Contents during page generation
+{:toc}
+
 ## Result
 
 Super Mario Bros is beatable on my emulator:
-#### TODO - Include a video of Super Mario Bros
+<iframe width="560" height="315" src="https://www.youtube.com/embed/PiHsOFmj8ts" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 Features:
 * Runs at a stable 60 FPS(can go up to 430 FPS in "headless" mode)
 * Use an Xbox 360 controller for game input
-* Savestates allow you to save and load the game at any time
-* Video recording remembers and plays back controller inputs.
+* Savestates allow you to save at any time. Impress your friends with flawless Goomba-stomping
+* Video recording works with savestates to remember a single chain of controller inputs.
 
 Games tested:
 * Donkey Kong
@@ -56,23 +59,40 @@ These components are either **Clocked** or are mapped to one of two **Address Sp
 
 For video/audio/controller IO with the host OS, I used the [SDL](https://github.com/Rust-SDL2/rust-sdl2) library.
 
-Here is a table with all structures in my program:
-| Structure            | Clocked? | Address Space? | Description |
-| ---                  | ---      | ---            | ---         |
-| Nes                  | T        | F              | Top-level hardware component. Has all others(except game controllers) as members |
-| C6502                | T        | T              | The CPU |
-| Ppu                  | T        | T              | Produces a 256x240 pixel display |
-| PpuRegisters         | F        | F              | Hides some tricky internal PPU state |
-| PaletteControl       | F        | T              | Used in the PPU. Stores which 13 colors have been chosen of 64 possible |
-| CpuPpuInterconnect   | F        | T              | Maps certain PPU registers to CPU address space |
-| Apu                  | T        | T              | Generates audio samples |
-| Ram                  | F        | T              | A fixed-size block of readable and writable memory |
-| Rom                  | F        | T              | A fixed-size block of read-only memory |
-| MirroredAddressSpace | F        | T              | Makes another `AddressSpace` appear in multiple regions. See [Memory Mirroring](https://wiki.nesdev.com/w/index.php/Mirroring#Memory_Mirroring) |
-| NullAddressSpace     | F        | T              | Represents unmapped address space. Returns 0 when read, and does nothing on write. |
-| Mapper               | F        | T              | Splits the address space into regions, which are assigned to other `AddressSpace` types |
-| Joystick             | F        | T              | Communicates controller inputs to the CPU |
-| Ines                 | F        | F              | A game cartridge, represented in [iNES](https://wiki.nesdev.com/w/index.php/INES) format |
+Here is a table with all structures in my program. They generally correspond to actual hardware components like RAM or internal timers.
+
+{::options parse_block_html="true" /}
+{:.spoiler}
+<div>
+
+| Structure Name       | Component | Clocked? | Address Space? | Description |
+| :---:                | :---:      | :---:            | :---:         |
+| [Nes](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/nes.rs#L27)                  | | T        | F              | Top-level hardware component. Has all others as members |
+| [C6502](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/c6502.rs#L27)                | CPU | T        | T              | The CPU |
+| [Ppu](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/ppu.rs#L44)                  | PPU | T        | T              | Produces a 256x240 pixel display |
+| [PpuRegisters](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/ppu.rs#L163)         | PPU | F        | F              | Hides some tricky internal PPU state |
+| [PaletteControl](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/ppu.rs#L534)       | PPU | F        | T              | Used in the PPU. Stores which 13 colors have been chosen of 64 possible |
+| [CpuPpuInterconnect](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/ppu.rs#L452)   | PPU | F        | T              | Maps certain PPU registers to CPU address space |
+| [Sprite](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/ppu.rs#L419) | PPU | F | F | Represents a 4-byte entry in the OAM table |
+| [Apu](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/apu.rs#L116)                  | APU | T        | T              | Generates audio samples |
+| [Frame Counter](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/apu.rs#L61) | APU | T | F | Generates a clock signal every quarter or half frame that other audio components react to. |
+| [Length Counter](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/apu.rs#L273) | APU | T | F | Silences an audio channel after a certain number of clock cycles. |
+| [Linear Counter](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/apu.rs#L322) | APU | T | F | Silences an audio channel according to a timer. Has slightly different timing than the length counter |
+| [Triangle](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/apu.rs#L371) | APU | T | F | Audio channel for a triangle wave |
+| [Sweep](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/apu.rs#L451) | APU | T | F | Dynamically changes the pitch of an audio channel |
+| [Envelope](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/apu.rs#L542) | APU | T | F | Dynamically changes the volume of an audio channel |
+| [Pulse](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/apu.rs#L603) | APU | T | F | Audio channel for a pulse/square wave |
+| [Noise](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/apu.rs#L708) | APU | T | F | Audio channel for pseudo-random noise |
+| [Dmc](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/apu.rs#L783) | APU | T | F | Audio channel for premade audio samples |
+| [Ram](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/mapper.rs#L36)                  | | F        | T              | A fixed-size block of readable and writable memory |
+| [Rom](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/mapper.rs#L82)                  | | F        | T              | A fixed-size block of read-only memory |
+| [MirroredAddressSpace](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/mapper.rs#L112) | | F        | T              | Makes another `AddressSpace` appear in multiple regions. See [Memory Mirroring](https://wiki.nesdev.com/w/index.php/Mirroring#Memory_Mirroring) |
+| [NullAddressSpace](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/mapper.rs#L164) | | F        | T              | Represents unmapped address space. Returns 0 when read, and does nothing on write. |
+| [Mapper](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/mapper.rs#L214) | | F        | T              | Splits the address space into regions, which are assigned to other `AddressSpace` types |
+| [Joystick](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/joystick.rs#L14) | Input | F        | T              | Communicates controller inputs to the CPU |
+| [Ines](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/nes.rs#L52) | Cartridge | F | F              | A game cartridge, represented in [iNES](https://wiki.nesdev.com/w/index.php/INES) format |
+
+</div>
 
 In this section, I'll talk about the most important of these, and each of the traits that link them together.
 
@@ -92,19 +112,17 @@ The CPU is an example of a clocked component. A single CPU instruction might:
 * Attempt to store an 8-bit value at an address
 * Calculate an addition using the Arithmetic Logic Unit(ALU)
 
-A clock-accurate emulation of a clocked component is the most accurate[1], but programmers - even rugged ones in the 1980s - generally don't depend on the clock-by-clock details of the CPU. They only use that e.g. a bitwise AND instruction takes 6 clock cycles, but not that it does a memory read on clock #2 and a memory write on clock #6. So it can be an acceptable loss of accuracy to run the entire CPU instruction in one clock cycle, and then do nothing for the next 5.
+A clock-accurate emulation of a clocked component is the most accurate[^1], but programmers - even rugged ones in the 1980s - generally don't depend on the clock-by-clock details of the CPU. They only use that e.g. a bitwise AND instruction takes 6 clock cycles, but not that it does a memory read on clock #2 and a memory write on clock #6. So it can be an acceptable loss of accuracy to run the entire CPU instruction in one clock cycle, and then do nothing for the next 5.
+
 
 The NES has a **Master Clock**, and all other Clocked components run at an integer fraction of its speed:
+
 | Component | Clock Speed |
+| --- | --- |
 | Master | 1:1 = 21.477272 Mhz |
 | CPU | 1:12 |
 | PPU | 1:4 |
 | APU | 1:24 |
-
-{:.spoiler}
-```
-There are [digital logic simulators](https://wiki.nesdev.com/w/index.php/Visual_2C02) created from special photographs of the CPU. These are not more accurate than a correctly-implemented cycle-accurate emulator, but are useful debugging tools to determine what the correct behavior should be. There are [rare cases](http://visual6502.org/wiki/index.php?title=6502_Opcode_8B_%28XAA,_ANE%29) where even this is not enough to explain the precise behavior of the CPU, but no published NES games make use of this detail.
-```
 
 ### Address Space
 
@@ -127,9 +145,11 @@ The CPU mostly handles game logic, while the PPU's address space stores sprites,
 
 Cartridges listen on both address buses. They are not a simple list of bytes, since they can have arbitrary circuitry embedded within them. Games can choose to include extra RAM, coprocessors for specialized calculations, or control registers for changing the address space.
 
-For example, Super Mario Bros 3 alternates between two different tilemaps when a control register is written, which animates the background.
+For example, Super Mario Bros 3 changes which tilemap is active - which animates the background - by writing to a single control register.
 
-#### TODO - Include screenshot of Super Mario Bros 3 using bank-switching to animate background
+![Bank Switching](/assets/articles/20190318-nes-emulator/bankswitch.gif)
+(Original image from [this article](https://n3s.io/index.php?title=How_It_Works))
+{: style="text-align: center;"}
 
 ### CPU
 
@@ -203,7 +223,7 @@ The first property guarantees that pointers to existing components aren't affect
 
 If this second property failed(say, if today the NES has a standard NES controller, but tomorrow it has a SNES controller), then the savestate files would need to include type information so the correct `load` method is called.
 
-However, given these restrictions, every NES component has very straightforward serialization code:
+However, given these restrictions, every NES component has very straightforward serialization code. For example:
 
 {:.spoiler}
 {% highlight rust %}
@@ -274,7 +294,7 @@ impl Savable for u32 {
 
 I think Rust's traits were particularly useful for implementing savestates. The compiler infers which `save` or `load` methods are needed for each type, so the code looks very uniform.
 
-The video playback feature builds on top of savestates by storing 1 byte per frame for inputs. When a savestate is restored, it also restores the input list.
+The video playback feature builds on top of savestates by storing 8 bits per frame - one for whether each controller button was pressed. When a savestate is restored, it also restores the active input list.
 
 ## Language
 
@@ -611,9 +631,12 @@ Future articles may cover:
 * Compiling the emulator to Javascript to run in-browser
 * Compatibility issues with less-common games
 * How specific NES games worked internally
-* Porting the emulator to run on a GPU[2]
+* Porting the emulator to run on a GPU[^2]
 * Writing an NES game in Rust
 * Making new optimization passes for `rustc` or LLVM
 * Accelerating an emulator with a JIT compiler
 
-{:.spoiler}```My emulator only depends on SDL, and the headless version might not need the standard library. So it should be possible to port it to [exotic platforms](https://www.michaelburge.us/2017/09/10/injecting-shellcode-to-speed-up-amazon-redshift.html).```
+### Footnotes
+
+[^1]: There are [digital logic simulators](https://wiki.nesdev.com/w/index.php/Visual_2C02) created from special photographs of the CPU. These are not more accurate than a correctly-implemented cycle-accurate emulator, but are useful debugging tools to determine what the correct behavior should be. There are [rare cases](http://visual6502.org/wiki/index.php?title=6502_Opcode_8B_%28XAA,_ANE%29) where even this is not enough to explain the precise behavior of the CPU, but no published NES games make use of this detail.
+[^2]: The visible part of the emulator only depends on SDL, and the headless version might not even need the standard library. So it should be possible to port it to [exotic platforms](https://www.michaelburge.us/2017/09/10/injecting-shellcode-to-speed-up-amazon-redshift.html).
