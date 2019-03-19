@@ -12,14 +12,18 @@ tags:
 
 Recently, I made an [emulator](https://github.com/MichaelBurge/nes-emulator) for the **Nintendo Entertainment Console**(NES) - a game console first released in 1983.
 
-In this article, I'll talk about how I used [Rust](https://www.rust-lang.org/) to develop the emulator. I'll cover:
+In this article, I'll talk about how I used [Rust](https://www.rust-lang.org/) to develop the emulator. I'll cover questions like:
 
-* Result: What features does the emulator support? What games can it play?
-* Problem Domain: How did I approach the problem of emulating the NES?
-* Language: Did Rust's type system or borrow checker interfere? Were there performance issues?
+* What features does the emulator support? What games can it play?
+* How did I approach the problem of emulating the NES?
+* Did Rust's type system or borrow checker interfere? Were there performance issues?
 
+<!-- -->
+
+Table of Contents:
 * This list is replaced with the Table of Contents during page generation
 {:toc}
+
 
 ## Result
 
@@ -36,17 +40,20 @@ Games tested:
 * Donkey Kong
 * Super Mario Bros
 
-A few remaining tasks would make the emulator much more widely usable:
+There are a few remaining tasks that would make it more usable:
 * Support for more [mappers](https://wiki.nesdev.com/w/index.php/Mapper) will allow it to play more games
 * The keyboard should be usable as an input device
+* The audio sounds different, though I don't know the words to describe the problem
 
-I think Rust was a fine language choice for my emulator. People frequently want to run emulators on [strange embedded systems](https://arstechnica.com/gaming/2018/07/nintendo-hid-a-load-your-own-nes-emulator-inside-a-gamecube-classic/), and C is probably still a better choice for those cases.
+Rust seems like it was a fine choice for this project. Using features like iterators and traits generally didn't slow down the program(though see below for one exception). Since an NES is a fixed hardware device, no dynamic allocation[^3] should be necessary and Rust makes it easy to reason about already-allocated memory with its ownership model.
 
-But Rust seems usable in any project where C++ is a viable language. Using features like iterators and traits didn't slow down the program.
+People frequently want to run emulators on [strange embedded systems](https://arstechnica.com/gaming/2018/07/nintendo-hid-a-load-your-own-nes-emulator-inside-a-gamecube-classic/). C is probably still a better choice for those cases: It's more difficult to find someone who can implement a Rust compiler than a C compiler.
+
+But Rust seems usable in any project where C++ is a viable language.
 
 ## Problem Domain
 
-I emulated the NES by emulating its individual hardware components. These include:
+I emulated the NES mostly by emulating each individual component separately. These include:
 
 * [MOS Technology 6502](https://en.wikipedia.org/wiki/MOS_Technology_6502) CPU
 * Custom [Picture Processing Unit(PPU)](https://wiki.nesdev.com/w/index.php/PPU)
@@ -55,7 +62,7 @@ I emulated the NES by emulating its individual hardware components. These includ
 * [Controller](https://wiki.nesdev.com/w/index.php/Standard_controller)
 * Cartridges with [custom circuitry](https://wiki.nesdev.com/w/index.php/Mapper)
 
-These components are either **Clocked** or are mapped to one of two **Address Spaces**. I define each component as a [C Struct](https://doc.rust-lang.org/rust-by-example/custom_types/structs.html), and use Rust's [Traits](https://doc.rust-lang.org/rust-by-example/trait.html) to specify which of these two ways the component is used in the overall system.
+These components are either **Clocked** or are mapped to one of two **Address Spaces**. I define each component as a [C Struct](https://doc.rust-lang.org/rust-by-example/custom_types/structs.html), and implement one of two [Traits](https://doc.rust-lang.org/rust-by-example/trait.html) to specify how it interacts with other components.
 
 For video/audio/controller IO with the host OS, I used the [SDL](https://github.com/Rust-SDL2/rust-sdl2) library.
 
@@ -71,7 +78,7 @@ Here is a table with all structures in my program. They generally correspond to 
 | [C6502](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/c6502.rs#L27)                | CPU | T        | T              | The CPU |
 | [Ppu](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/ppu.rs#L44)                  | PPU | T        | T              | Produces a 256x240 pixel display |
 | [PpuRegisters](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/ppu.rs#L163)         | PPU | F        | F              | Hides some tricky internal PPU state |
-| [PaletteControl](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/ppu.rs#L534)       | PPU | F        | T              | Used in the PPU. Stores which 13 colors have been chosen of 64 possible |
+| [PaletteControl](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/ppu.rs#L534)       | PPU | F        | T              | Stores which 13 colors have been chosen of 64 possible |
 | [CpuPpuInterconnect](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/ppu.rs#L452)   | PPU | F        | T              | Maps certain PPU registers to CPU address space |
 | [Sprite](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/ppu.rs#L419) | PPU | F | F | Represents a 4-byte entry in the OAM table |
 | [Apu](https://github.com/MichaelBurge/nes-emulator/blob/ce768d7b090688a68f4ef732f9d1f18f1d29542a/src/apu.rs#L116)                  | APU | T        | T              | Generates audio samples |
@@ -105,15 +112,16 @@ pub trait Clocked {
 
 {% endhighlight %}
 
-A clock cycle is the smallest discrete step that a device can take, and all of the device's work should be done faster than the devices **Clock Speed**.
+A clock cycle is the smallest discrete step that a component can make: There should be no observable changes outside of a clock cycle.
 
 The CPU is an example of a clocked component. A single CPU instruction might:
 * Request an 8-bit value at an address
 * Attempt to store an 8-bit value at an address
 * Calculate an addition using the Arithmetic Logic Unit(ALU)
 
-A clock-accurate emulation of a clocked component is the most accurate[^1], but programmers - even rugged ones in the 1980s - generally don't depend on the clock-by-clock details of the CPU. They only use that e.g. a bitwise AND instruction takes 6 clock cycles, but not that it does a memory read on clock #2 and a memory write on clock #6. So it can be an acceptable loss of accuracy to run the entire CPU instruction in one clock cycle, and then do nothing for the next 5.
+Generally, an emulation that does more work at once is faster than a component that simulates each individual clock cycle.
 
+A clock-accurate emulation of a clocked component is the most accurate[^1], but programmers - even rugged ones in the 1980s - generally don't depend on the clock-by-clock details of the CPU. It's common to assume that a bitwise AND instruction takes 6 clock cycles, but not that it does a memory read on clock #2 and a memory write on clock #6. So it can be an acceptable loss of accuracy to run the entire CPU instruction in one clock cycle, and then do nothing for the next 5.
 
 The NES has a **Master Clock**, and all other Clocked components run at an integer fraction of its speed:
 
@@ -124,11 +132,13 @@ The NES has a **Master Clock**, and all other Clocked components run at an integ
 | PPU | 1:4 |
 | APU | 1:24 |
 
+The APU has components that act on two separate clock signals: One from the APU clock, and one from an internal `FrameCounter` that sends a signal every half or quarter frame.
+
 ### Address Space
 
-When a component wants to read or write a value at an address, it places the address on an **Address Bus**. Other components listen for specific addresses that they have been assigned.
+When a component wants to read or write a value at an address, it places the address on an **Address Bus**. There is a separate **Data Bus** that holds the value being read or written. Other components listen for specific addresses that they have been assigned.
 
-An Address Space is an assignment of addresses to actions that components take.
+An emulated Address Space is an assignment of addresses to actions that components take.
 
 {% highlight rust %}
 pub trait AddressSpace {
@@ -137,32 +147,33 @@ pub trait AddressSpace {
 }
 {% endhighlight %}
 
-The NES has two different address buses, primarily used by the CPU and PPU respectively:
+The NES has two different address spaces, primarily used by the CPU and PPU respectively:
 * [CPU Memory Map](https://wiki.nesdev.com/w/index.php/CPU_memory_map)
 * [PPU Memory Map](https://wiki.nesdev.com/w/index.php/PPU_memory_map)
 
 The CPU mostly handles game logic, while the PPU's address space stores sprites, tiles, and colors.
 
-Cartridges listen on both address buses. They are not a simple list of bytes, since they can have arbitrary circuitry embedded within them. Games can choose to include extra RAM, coprocessors for specialized calculations, or control registers for changing the address space.
+Cartridges listen on both address buses. They are not a simple ROM holding a list of bytes, since they can have arbitrary circuitry[^4]. Games can choose to include extra RAM, coprocessors for specialized calculations, or control registers for changing the address space.
 
-For example, Super Mario Bros 3 changes which tilemap is active - which animates the background - by writing to a single control register.
+Super Mario Bros 3 animates its background by telling the cartridge to suddenly switch between two different background tile patterns. When the PPU reads from the relevant addresses, the cartridge suddenly starts returning different tile data. Its otherwise not possible to update the entire background in a single frame.
 
 ![Bank Switching](/assets/articles/20190318-nes-emulator/bankswitch.gif)
+
 (Original image from [this article](https://n3s.io/index.php?title=How_It_Works))
 {: style="text-align: center;"}
 
 ### CPU
 
-The CPU is the most important component, because it has the most variety of responsibilities.
+The CPU handles the game logic: What happens when Mario jumps, stomps on a Goomba, or falls in a pit?
 
-It repeatedly fetches, decodes, and executes an instruction located at the current **Program Counter** - a pointer in CPU address space - which is then incremented to the next instruction.
+It repeatedly fetches, decodes, and executes an instruction at the current **Program Counter** - a pointer in CPU address space - which is then incremented to the next instruction.
 
-The CPU can only perform three actions:
+The CPU can only perform three primitive actions:
 * Request a read(in CPU address space)
 * Request a write
 * Change its internal registers
 
-All instructions are combinations of these primitive actions. For example, the [Arithmetic Shift Left, with Absolute,X addressing mode](http://obelisk.me.uk/6502/reference.html) instruction(`0x1E`) takes 7 clock cycles and causes the CPU to perform the following 7 actions:
+All instructions are combinations of these. The [Arithmetic Shift Left, with Absolute,X addressing mode](http://obelisk.me.uk/6502/reference.html) instruction(`0x1E`) takes 7 clock cycles and causes the CPU to perform the following 7 actions[^5]:
 * (1) Fetch the opcode byte `0x1E` at the current program counter
 * (2,3) Fetch a two-byte value `V` immediately after the opcode byte containing a 16-bit address
 * (4) Adds the `X` register to `V`
@@ -176,19 +187,19 @@ I implemented each instruction in terms of the three primitive operations, gener
 
 ### PPU
 
-At 60 Frames per Second(FPS) the NES' CPU can execute `29780` clock cycles per frame(for NTSC video), but there are `61440` different pixels to draw. So the CPU is too slow to draw even a blank screen.
+At 60 **Frames per Second**(FPS) the NES' CPU can execute `29780` clock cycles per frame[^6], but there are `61440` different pixels to display. So the CPU is too slow to draw even a blank screen.
 
-A separate "Picture Processing Unit" runs at triple the clock speed, emitting one pixel per cycle. There are more cycles available than pixels to draw, so the idle time("Vertical Blank") is used by the CPU to configure the PPU for the next frame.
+A **Picture Processing Unit**(PPU) runs at triple the CPU's clock speed, emitting one pixel per cycle. It has more cycles available than pixels to emit, so the idle time("Vertical Blank") is used by the CPU to configure the PPU for the next frame.
 
-The PPU mainly draws two things: Background tiles and sprites. Up to 32 x 30 tiles and 64 sprites can be displayed at once, and these share a pool of 512 different 8x8 patterns.
+The PPU draws two things: Background tiles and sprites. Up to 32 x 30 tiles and 64 sprites can be displayed at once, and these share a pool of 512 different 8x8 4-color patterns.
 
-There are 4 different tables that store tile and sprite information:
-* Nametable: A table of bytes which each specify an 8x8 pattern
-* Attribute table: Specifies which palette is used for each 16x16 group of tiles
-* Object Attribute Memory(OAM): Stores the position, palette, and status of 64 sprites
-* Palette: There are 4 different palettes, which each choose 3 of 64 different colors.
+There are 4 tables in PPU address space that configure these:
+* **Nametable**: A table of 32x30 bytes that specify which 8x8 pattern to use
+* **Attribute Table**: Specifies which 4-color palette is used for each 16x16 group of tiles
+* **Object Attribute Memory**(OAM): Stores the position, palette, and status of 64 sprites
+* **Palette**: There are 8 different 4-color palettes. The first color is always transparent, and the other 3 choose from 64 different **System Colors**.
 
-Even though they use separate address spaces, there are three communication channels between the PPU and CPU:
+The PPU and CPU have different address spaces, but they are not isolated. There are three communication channels between them:
 * There are 8 PPU registers mapped in the CPU's address space.
 * The PPU triggers two CPU interrupts: End-of-scanline and Vertical Blank.
 * The cartridge itself can choose to modify its assigned PPU address space based on reads or writes to the CPU address space.
@@ -197,16 +208,14 @@ There are 5 primitive actions that the PPU can take on each clock cycle:
 * Request a read( in PPU address space)
 * Request a write
 * Change its internal registers
-* Emit a single pixel as an NTSC or PAL video signal
+* Emit a single pixel
 * Trigger a CPU interrupt
-
-There are actually two slightly different PPUs, depending on the region the NES was sold in: NTSC and PAL.
 
 It is more difficult to test the PPU than the CPU: Much of the PPU must already be functioning in order to get any output at all. I recommend printing out the 4 tables separately - and once that data is confirmed correct, then test whether these are combined correctly for any particular pixel.
 
 ### Save States
 
-A common feature in emulators is to save and load a game at any point. Every component implements a `Savable` trait that replaces its data with incoming data from a filehandle:
+A common feature in emulators is to save and load a game at any time. Every component implements the `Savable` trait:
 
 {% highlight rust %}
 pub trait Savable {
@@ -216,14 +225,14 @@ pub trait Savable {
 {% endhighlight %}
 
 There are two properties that make this model useful:
-* My emulator doesn't allocate memory, so every object can be written in-place.
-* Loading a ROM always creates the same types of components, so the values saved from a previous program execution can be assumed to be compatible.
+* Once a ROM has been loaded, my emulator doesn't allocate memory. So every object can be written in-place.
+* Loading a ROM always creates the same types of components, so the values saved from a previous program execution can be assumed compatible.
 
-The first property guarantees that pointers to existing components aren't affected by a savestate restore. If a component is dynamically-allocated and a savestate from before or after its lifetime is loaded, then any pointers to it would need to be changed. This would require keeping track of which objects have pointers to which other objects.
+The first property guarantees that pointers aren't affected by a savestate restore. If a component is dynamically-allocated and a savestate from before or after its lifetime is loaded, then any pointers to it are no longer valid. This would require keeping track of which objects have pointers to which other objects.
 
-If this second property failed(say, if today the NES has a standard NES controller, but tomorrow it has a SNES controller), then the savestate files would need to include type information so the correct `load` method is called.
+If this second property failed(say, if someone unplugged a standard NES controller and plugged in a new SNES controller), then the savestate files would need to include type information so the correct `load` method is called.
 
-However, given these restrictions, every NES component has very straightforward serialization code. For example:
+However, assuming these restrictions makes serialization straightforward. For example:
 
 {:.spoiler}
 {% highlight rust %}
@@ -267,7 +276,7 @@ impl Savable for C6502 {
 }
 {% endhighlight %}
 
-The primitives like `bool` or `u32` are similarly pretty simple:
+Every component except for the primitives like `bool` or `u32` look like that. The primitives aren't too difficult either:
 
 {% highlight rust %}
 impl Savable for u32 {
@@ -292,27 +301,27 @@ impl Savable for u32 {
 }
 {% endhighlight %}
 
-I think Rust's traits were particularly useful for implementing savestates. The compiler infers which `save` or `load` methods are needed for each type, so the code looks very uniform.
+Rust's traits were useful for implementing savestates. The compiler infers which `save` or `load` methods are needed for each type, so the code is uniform.
 
 The video playback feature builds on top of savestates by storing 8 bits per frame - one for whether each controller button was pressed. When a savestate is restored, it also restores the active input list.
 
-## Language
+## Rust Language
 
-Having modeled the NES at a relatively high-level, it's worth asking if the Rust language gave any problems when this was translated into code.
+The previous section gave a high-level overview of how I designed my NES emulator. In this section, I'll talk about the Rust language itself.
 
 ### Integer overflow
 
-By default, Rust(with the `debug` flag enabled) will throw an exception if any arithmetic operation overflows. This actually caught a fair number of bugs during testing, because the [wrapping_*](https://doc.rust-lang.org/std/primitive.u32.html#method.wrapping_add) versions require explicit type information and it's important whether a number wraps as a 16-bit value or an 8-bit value.
+By default, Rust will throw an exception if any arithmetic operation overflows. This caught a fair number of bugs during testing, because the [wrapping_*](https://doc.rust-lang.org/std/primitive.u32.html#method.wrapping_add) functions require explicit type information and it's important whether a number wraps as a 16-bit value or an 8-bit value.
 
-I used the `wrapping_*` functions in my emulator, but there are also [Wrapping](https://doc.rust-lang.org/std/num/struct.Wrapping.html) types that imply wrapping arithmetic operations.
+I used functions like `wrapping_add` in my emulator, but there are also [Wrapping](https://doc.rust-lang.org/std/num/struct.Wrapping.html) types that imply wrapping arithmetic operations.
 
 ### Single-ownership
 
 In Rust, mutable values must have a single owning variable. Other variables can **borrow** it, but only one mutable reference is allowed at a single time.
 
-The CPU address space has several PPU registers mapped. So the CPU must have a mutable reference to the PPU, but because both are sibling components neither owns the other.
+The CPU address space has several PPU registers mapped. So the CPU maintains a permanent mutable reference to the PPU. But the top-level `Nes` object also owns the PPU.
 
-I worked around this by using [Box](https://doc.rust-lang.org/std/boxed/struct.Box.html) to assign fixed memory addresses to every value, and then using "unsafe" pointer dereferences when needed.
+I worked around this using [Box](https://doc.rust-lang.org/std/boxed/struct.Box.html) to assign fixed memory addresses to values, and then "unsafe" pointer dereferences when needed.
 
 {:.spoiler}
 {% highlight rust %}
@@ -376,23 +385,11 @@ impl AddressSpace for CpuPpuInterconnect {
 
 This use of `unsafe` means that my emulator is not thread-safe. If both the PPU and CPU ran in separate threads, they could both issue writes to the same address or read a value while it is being written.
 
-If the `unsafe` blocks are undesirable, a [Mutex](https://doc.rust-lang.org/beta/book/ch16-03-shared-state.html) might be a good solution here. The lock would be held for a relatively small amount of time, so it shouldn't cause much of a performance issue.
-
-### Mutable references
-
-A mutable reference to a variable creates a sort of exclusive lock against any other references. There are certain optimizations that can be made if
-
-{% highlight rust %}
-'a: {
-    let foo = Box::new(5);
-    let pfoo:*mut foo = &mut foo;
-    consume_ownership(*foo);
-}
-{% endhighlight %}
+A [Mutex](https://doc.rust-lang.org/beta/book/ch16-03-shared-state.html) might be a solution here. The lock would be held for a small amount of time, so it shouldn't cause much of a performance issue.
 
 ### Performance
 
-In a later article, I plan to train a Reinforcement Learning(RL) agent to play Mario. A faster emulator allows me to gather more sample data, so I spent a few hours ensuring my emulator was comparable to other NES emulators used for RL research.
+In a later article, I plan to train a **Reinforcement Learning**(RL) agent to play Mario. A faster emulator allows me to gather more sample data, so I spent a few hours ensuring my emulator was comparable to other NES emulators used for RL research.
 
 My benchmark runs 10,000 frames of Mario in a "headless" mode with no video or sound, and then writes a screenshot.
 
@@ -575,13 +572,13 @@ The variables are assigned as follows:
 * `rcx` is also the `idx` variable, but updated more frequently in the unrolled `30:` loop.
 * `rsi` points to the first data that the `30:` loop is unable to process.
 
-The main difference seems to be that `foo` counts bytes while `bar` counts elements. If I had to guess, I would say `rustc` makes an early determination to count bytes rather than elements, because the tuple `(x, idx)` has size 16 bytes and the addressing mode `QWORD PTR [rdi+rdx*8+C]` has a maximum scale of `8`.
+The main difference seems to be that `foo` counts bytes while `bar` counts elements. Perhaps the tuple `(x, idx)` has size 16 bytes which is larger than the maximum scale of `8` in addressing modes like `QWORD PTR [rdi+rdx*8+C]`. `rustc` might choose its loop strategy before later optimizations make them equivalent. The difference goes away if `foo` and `bar` are changed to take `u8`s rather than `usize`s.
 
 In any case, changing one of my loops to use `bar`'s style improved the emulator's FPS by 10%.
 
 #### Search order
 
-Recall that the CPU Address Space consists of many components which each listen for reads and writes to specific addresses.
+The CPU Address Space consists of many components which each listen for reads and writes to specific addresses.
 
 The **Mapper** takes an address and does a linear search through all of them looking for the responsible component.
 
@@ -600,6 +597,7 @@ fn map_nes_cpu(&mut self, joystick1: Box<AddressSpace>, joystick2: Box<AddressSp
     mapper.map_address_space(0x4015, 0x4015, Box::new(apu), true);
     mapper.map_address_space(0x4016, 0x4016, joystick1, false);
     mapper.map_address_space(0x4017, 0x4017, Box::new(apu), true); // TODO - 0x4017 is also mapped to joystick2
+    mapper.map_address_space(0x4017, 0x4017, joystick2, false); // TODO - joystick2 isn't used, but this transfers ownership so it isn't deallocated(since it is updated through pointers)
 
     mapper.map_null(0x4018, 0x401F); // APU test mode
     mapper.map_address_space(0x4020, 0xFFFF, cartridge, true);
@@ -609,7 +607,7 @@ fn map_nes_cpu(&mut self, joystick1: Box<AddressSpace>, joystick2: Box<AddressSp
 }
 {% endhighlight %}
 
-However, this puts the `cartridge` at the very end of the linear search. The cartridge contains all of the game's code, so every new instruction fetch was causing a worst-case linear-search.
+However, this puts the `cartridge` at the very end. The cartridge contains all of the game's code, so every time the CPU fetched a new instruction it got a worst-case linear-search.
 
 I experimented with an LRU cache, but found the best improvement by simply reordering those statements to put the most frequently-accessed components first.
 
@@ -617,16 +615,13 @@ This also gave a 10% improvement in FPS.
 
 ## Conclusion
 
-If you're interested in NES development, you might like these links:
+This article discussed an NES emulator I developed using the Rust programming language.
 
-References:
+If you're interested in learning more about NES development, I recommend the [Nesdev Wiki](https://wiki.nesdev.com/w/index.php/Nesdev_Wiki) for technical details needed to make emulators or games.
 
-* [Nesdev Wiki](https://wiki.nesdev.com/w/index.php/Nesdev_Wiki)
-* [Reverse Emulation](https://www.youtube.com/watch?v=ar9WRwCiSr0) shows how cartridges can even have a modern processor in them.
-
-Future articles may cover:
+Future articles on this subject may cover:
+* Training an agent to play Mario
 * Improving the performance of the emulator
-* Training Neural Networks to play Mario
 * Developing emulators for other systems
 * Compiling the emulator to Javascript to run in-browser
 * Compatibility issues with less-common games
@@ -640,3 +635,7 @@ Future articles may cover:
 
 [^1]: There are [digital logic simulators](https://wiki.nesdev.com/w/index.php/Visual_2C02) created from special photographs of the CPU. These are not more accurate than a correctly-implemented cycle-accurate emulator, but are useful debugging tools to determine what the correct behavior should be. There are [rare cases](http://visual6502.org/wiki/index.php?title=6502_Opcode_8B_%28XAA,_ANE%29) where even this is not enough to explain the precise behavior of the CPU, but no published NES games make use of this detail.
 [^2]: The visible part of the emulator only depends on SDL, and the headless version might not even need the standard library. So it should be possible to port it to [exotic platforms](https://www.michaelburge.us/2017/09/10/injecting-shellcode-to-speed-up-amazon-redshift.html).
+[^3]: My emulator actually uses quite a few [`Box`](https://doc.rust-lang.org/std/boxed/struct.Box.html) objects. Mostly this isn't to allocate memory, but to assign data a fixed memory location so I can safely take mutable pointers to it. I think all dynamic allocation is removable except for the choice of mapper when loading a cartridge. Since each game can have different components inside, dynamic allocation seems necessary there.
+[^4]: See this video on [Reverse Emulation](https://www.youtube.com/watch?v=ar9WRwCiSr0). It's possible to put a modern processor inside an NES cartridge to do some neat tricks.
+[^5]: I haven't confirmed with the digital logic simulator that the 7 clock cycles map precisely to the 7 actions I mentioned. It's an educated guess that serves to illustrate the difference between instructions and clock cycles.
+[^6]: These numbers are simplified and assume the NTSC video standard. NES consoles sold in regions that use the PAL standard have slightly different timings to generate video. Even/odd frames may take an extra clock cycle. Refer to the Nesdev Wiki for exact timing details.
