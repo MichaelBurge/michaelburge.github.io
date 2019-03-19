@@ -51,7 +51,7 @@ People frequently want to run emulators on [strange embedded systems](https://ar
 
 But Rust seems usable in any project where C++ is a viable language.
 
-## Problem Domain
+## Emulator
 
 I emulated the NES mostly by emulating each individual component separately. These include:
 
