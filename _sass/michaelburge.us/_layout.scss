@@ -2,7 +2,7 @@
     a {
         color: darken($nav-color, 15%);
         text-decoration: none;
-        
+
         &:visited {
             color: lighten($nav-color, 15%);
         }
@@ -11,10 +11,10 @@
             color: lighten($nav-color, 30%);
             text-decoration: underline;
         }
-        
+
         .social-media-list &:hover {
             text-decoration: none;
-            
+
             .username {
                 text-decoration: underline;
             }
@@ -40,7 +40,7 @@
   line-height: $base-line-height * $base-font-size * 2.25;
   display: flex;
   justify-content: space-between;
-  
+
   &,
   &:visited {
       color: $grey-color-light;
@@ -210,5 +210,11 @@ table {
 }
 
 .mailchimp {
+    text-align: center;
+}
+
+iframe {
+    display: block;
+    margin: 0 auto;
     text-align: center;
 }

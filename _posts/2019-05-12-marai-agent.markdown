@@ -1,12 +1,15 @@
 ---
 layout: post
 author: Tian Qi and Michael Burge
-title: "Beating Mario Levels with Reinforcement Learning"
+title: "Beating Mario with Reinforcement Learning"
 date: 2019-05-12 23:00
 tags:
   - machine_learning
   - python
   - rust
+js_files:
+  - https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML
+
 ---
 
 Super Mario Bros is a video game originally released for the Nintendo Entertainment System(NES) in 1985. We developed an AI agent that passes some levels in this game - replicating an [OpenAI Paper](https://pathak22.github.io/large-scale-curiosity/) with similar ideas.
@@ -64,20 +67,11 @@ The environment has an associated **State**. The state is the set of inputs the 
 
 Each state has a set of associated **Moves**. A move is an output that causes the environment to transition to a different state. There are 14 moves the agent can choose from. This subset prevents it from pausing or pressing left/right at the same time. They are:
 
-| NOTHING |
-| UP |
-| DOWN |
-| LEFT |
-| RIGHT |
-| A |
-| B |
-| A + B |
-| RIGHT + A |
-| RIGHT + B |
-| RIGHT + A + B |
-| LEFT + A |
-| LEFT + B |
-| LEFT + A + B |
+* NOTHING
+* UP, DOWN, LEFT, RIGHT
+* A, B, A + B
+* RIGHT + {A, B, A + B}
+* LEFT + {A, B, A + B}
 
 Given a state, the agent should choose the **Move** that provides the biggest **Reward**. Reward is not the same as surprisal. The surprisal is the unexpectedness of a single state, but the agent should factor in future surprisals as well.
 
@@ -99,7 +93,7 @@ We choose to use stacked frames rather than single frames for these reasons:
 * 3 frames allows our agent to approximate Mario’s velocity and acceleration. The velocity distinguishes between rising and falling sprites. The acceleration might be helpful determining whether it can jump over obstacles.
 * The OpenAI paper stacked 4 frames with 3 frame gaps. We use a 3-stack to help visualize the state: Each greyscale frame can be assigned to the Red, Green, or Blue color channel. It didn't seem to decrease network performance.
 
-After the state is created, it is **Normalized**. The state represents pixels as grayscale values in the range [0,255]. The normalized state is instead centered around 0 and divided by the `std`([**Standard Deviation**](https://en.wikipedia.org/wiki/Standard_deviation). This gives better results than another common way of normalizing pixels: Subtracting by 127.5 and dividing by 255.
+After the state is created, it is **Normalized**. The state represents pixels as grayscale values in the range [0,255]. The normalized state is instead centered around 0 and divided by the `std`([**Standard Deviation**](https://en.wikipedia.org/wiki/Standard_deviation)). This gives better results than another common way of normalizing pixels: Subtracting by 127.5 and dividing by 255.
 
 Mean and std are calculated over 10,000 random moves at the beginning of level 1-1. Each pixel in the state has its own mean, but the standard deviation is averaged to produce a single number.
 
@@ -117,19 +111,25 @@ Dying gives a large surprisal, comparable to entering a new level: There is a ve
 
 This is undesirable, but can be avoided using a different reward.
 
-The reward for an initial state `state(0)>` is defined as follows.
-* The environment is measured as `state(0)`
-* The model produces an action `action(0)` and an expected state `guess(0)`
-* `action_0` is sent to the environment to advance it to `state(1)`
-* The difference between `state(1)` and `guess(0)` is `surprisal(0)`
+The reward for an initial state $$\text{state}(0)$$ is defined inductively as:
+* The environment is measured as $$\text{state}(0)$$
+* The model produces an action $$\text{action}(0)$$ and an expected state $$\text{guess}(0)$$
+* $$\text{action}(0)$$ is sent to the environment to advance it to $$\text{state}(1)$$
+* The difference between $$\text{state}(1)$$ and $$\text{guess}(0)$$ is $$\text{surprisal}(0)$$
 
-This can be repeated with "state(1)" to produce "surprisal(1)". If we let the agent iterate like this infinite times, we will get an infinite stream of surprisals.
+This can be repeated with $$\text{state}(1)$$ to produce $$\text{surprisal}(1)$$. If we let the agent iterate like this infinite times, we will get an infinite stream of surprisals.
 
-The true reward is the infinite sum:
-```
-true_reward(i) = discount<sup>0</sup> * surprisal(i) + discount<sup>1</sup> * surprisal(i+1) + discount<sup>2</sup> * surprisal(i) + ...
-```
-where the discount is a number between 0 and 1.[^4] Since `discount<sup>n</sup>` converges to 0 as `n` increases, surprisals requiring more moves to reach have less impact than closer ones. Since far away states are almost zero, our code only calculates 128 surprisals.
+The ideal reward is the infinite sum:
+
+$$
+\begin{split}
+\text{reward}_{\text{ideal}}(i) & = \text{discount}^0 * \text{surprisal}(i) + \text{discount}^1 * \text{surprisal}(i+1) + ... \\
+
+&= \sum_{k=0}^\infty \text{discount}^k * \text{surprisal}(i+k)
+\end{split}
+$$
+
+where the discount is a number between 0 and 1.[^4] Since $$\text{discount}^n$$ converges to 0 as $$n$$ increases, distant surprisals have less impact than closer ones. Our code only calculates 128 surprisals, so the actual reward is slightly different - see the [Reward](#reward) section for details.
 
 With this reward, the network isn't as incentivized to die. It still gets a large surprisal on death, but since it reenters the same level all other surprisals will be close to zero. So the strategy of "moving right" is preferred over dying, and in Mario that is usually enough to beat the level.
 
@@ -174,7 +174,7 @@ An episode runs for 128 states, but since the surprisal is defined using the nex
 
 ### Dynamics
 
-![Dynamics Network](/assest/articles/20190512-marai/dynamics-network.png)
+![Dynamics Network](/assets/articles/20190512-marai/dynamics-network.svg)
 
 This network contains a CNN called the Feature Mapper that converts states into feature vectors.
 
@@ -186,27 +186,27 @@ The `Dense Resnet Layer` node was implemented in two different ways: OpenAI's or
 
 ### Reward
 
-The rollout contains 129 states. The true reward for `state(i)` is
+The rollout contains 129 states. The ideal reward for `state(i)` is
 
-```
-true_reward(i) = discount^0 * surprisal(i) + discount^1 * surprisal_(i+1) + discount^2 * surprisal(i+2) + ...
-```
+$$
+reward_{ideal}(i) = \sum_{k=0}^\infty discount^k * surprisal(i+k)
+$$
 
 We use Forward Dynamics to get 128 surprisals from the 129 states and semi-normalize them by dividing against a running standard deviation. This reduce variance and stabilizes training. We keep one running std per environment.
 
-The definition of `true_reward` requires infinitely many surprisals, but there are a limited amount available - especially for the last states. We work around this by bootstrapping using an estimated reward: The Policy Network estimates the true reward, and we combine that with the 128 surprisals to calculate a target reward. So the reward is a somewhat circular definition:
+The definition of $$reward_{ideal}$$ requires infinitely many surprisals, but there are a limited amount available - especially for the last states. We work around this by bootstrapping using an estimated reward: The Policy Network estimates the true reward, and we combine that with the 128 surprisals to calculate a target reward. So the reward is a somewhat circular definition:
 
-```
-target_reward(i) = surprisal(i) + discount * predicted_reward(i+1)
-```
+$$
+\text{target_reward}(i) = \text{surprisal}(i) + \text{discount} * \text{predicted_reward}(i+1)
+$$
 
 
 We define
-```
-value_loss(i) = 0.5 * (target_reward(i) - predicted_reward(i))^2
-```
+$$
+\text{value_loss}(i) = 0.5 * (\text{target_reward}(i) - \text{predicted_reward}(i))^2
+$$
 
-The CNN is shared between three loss functions(`value_loss`, `entropy_loss`, and `pg_loss`), which each attempt to update its weights. The factor of `0.5` reduces the importance of this loss relative to the others. `entropy_loss` has a weight of `0.001` while `pg_loss` has a weight of `1.0`.
+The CNN is shared between three loss functions($$\text{value_loss}$$, $$\text{entropy_loss}$$, and $$\text{pg_loss}$$), which each attempt to update its weights. The factor of `0.5` reduces the importance of this loss relative to the others. `entropy_loss` has a weight of `0.001` while `pg_loss` has a weight of `1.0`.
 
 As the network trains, `estimated_reward` and `target_reward` should converge to each other. A corollary is that `estimated_reward(i) - discount * estimated_reward(i+1)` should converge to `surprisal(i)`.
 
@@ -226,7 +226,7 @@ Unlike with rewards, we don't train an estimator so the advantage is calculated 
 
 This optimization algorithm was published by OpenAI, and has been used in recent reinforcement learning results such as [defeating professional teams in Dota 2](https://openai.com/blog/how-to-train-your-openai-five/).
 
-![Policy Network](/assest/articles/20190512-marai/policy-network.png)
+![Policy Network](/assets/articles/20190512-marai/policy-network.svg)
 
 The three convolutional and dense layers convert a game state into a preference score for each of the 14 actions. The Softmax Cross Entropy normalizes the scores so they sum to 1. The scores are effectively probabilities, though they are only converted to a [0, 1] range at the end.
 
@@ -266,11 +266,13 @@ Reinforce cases occur when the network agrees with previous minibatches, updatin
 When the Policy network initializes, its preferences and errors are random and small. The entropy loss prevents the network from strengthening these initial preferences by chance:
 
 $$
-score_i = e^advantage_i
-total = sum_i score_i
-p_i = score_i / total # Percentage of total score
-
-entropy_loss = (- 0.001) * sum_i p_i * (log(total_score) - advantage_i)
+\begin{align}
+score_i &= e^{advantage_i} \\
+total &= \sum_i score_i \\
+p_i &= score_i / total \; \; \text{Percentage of rescaled score} \\
+\\
+entropy_{loss} &= (- 0.001) * \sum_i p_i * (log(total) - advantage_i)
+\end{align}
 $$
 
 The `entropy_loss` is calculated per-batch, and these are averaged to produce the final entropy loss.
@@ -285,7 +287,7 @@ This article explained how we replicated an OpenAI paper to train an agent that 
 
 Existing techniques work by densely sampling a random exploration space. They don't plan or reason about the world - they make random movements and remember what seems to work.
 
-The next article on this website will explore a similar idea, but using a symbolic temporal logic to give interpretable reasons for choosing certain actions over others.
+The next article here will explore training an agent that trains a model of a symbolic temporal logic, so that there are interpretable reasons for choosing certain actions over others.
 
 ### Footnotes
 
