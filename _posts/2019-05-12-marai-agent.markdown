@@ -12,7 +12,7 @@ js_files:
 
 ---
 
-Super Mario Bros is a video game originally released for the Nintendo Entertainment System(NES) in 1985. We developed an AI agent that passes some levels in this game - replicating an [OpenAI Paper](https://pathak22.github.io/large-scale-curiosity/) with similar ideas.
+Super Mario Bros is a video game originally released for the Nintendo Entertainment System(NES) in 1985. We developed an AI agent that passes some levels in this game - replicating a paper from members of [OpenAI and UC Berkeley](https://arxiv.org/abs/1808.04355) with similar ideas. You can see OpenAI's blog [here] (https://openai.com/blog/reinforcement-learning-with-prediction-based-rewards/)
 
 The central idea is to use **Curiosity** as a reward. The agent
 * Attempts to predict future states
@@ -31,19 +31,21 @@ We recorded a video with an interesting subset of levels below:
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/PiHsOFmj8ts" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
+Each level was trained independently with a maximum of 150,000 updates.
+
 | Level | Pass? | Description |
 | ---   | ---   | --- |
-| 1-1   | <span style="green">Yes</span> | This was the most-tested level during development. It consistently beats it, but the time required is a [**Bimodal Distribution**](https://en.wikipedia.org/wiki/Multimodal_distribution). It beats the first level quickly if it finds a hidden room that skips most of the level. |
-| 1-2 | <span style="green">Yes</span> | There is a narrow section that requires Mario to wait until enemies pass through, contrary to the general policy of “moving right”. The agent consistently passes this level, usually without finding the [Warp Zone](https://www.mariowiki.com/Warp_Zone) |
-| 1-3 | <span style="red">No</span> | The end of the level uses slightly different tiles, which confuse the feature detector. That part trains slowly, since it has to beat most of the level to get there. |
-| 1-4 | <span style="green">Yes</span> | The first bowser castle, introducing spinning traps and the "fake Bowser". |
-| 2-2 | <span style="red">No</span> | The first water level uses a different movement mechanic and homing enemies ([Blooper](https://www.mariowiki.com/blooper)). It can pass about 75% of the level, before getting stuck at a chokepoint with several bloopers. |
-| 2-3 | <span style="red">No</span> | Mario must cross a long bridge while being constantly assaulted by flying fish ([Cheep Cheeps](https://www.mariowiki.com/Cheep_Cheep)). The agent has difficulty navigating randomly-spawning enemies. |
-| 2-4 | | |
-| 3-4 | | |
-| 4-1 | | Introduction of Lakitu, who follows Mario and throws Spiny Eggs to deter him. |
-| 8-3 | <span style="red">No</span> | The second last level, which contains an assortment of enemies. Koopas, Bullet Bills, Hammer Bros and Pirana Plants.p I suspect this level could be beaten if I used more parallel environments and bigger batch sizes. |
-| 8-4 | <span style="red">No</span> | The final level, which contains a water section and a non-linear map. There is a specific route Mario must follow, or else it gets sent back in the level. Wandering around making no progress is "boring", so the policy converges to Mario jumping into the second lava pit. |
+| 1-1   | <span style="green">Yes</span> | This was the most-tested level during development. It consistently beats it, but the time required is a [**Bimodal Distribution**](https://en.wikipedia.org/wiki/Mcan make it to the three small platforms before dyinuickly if it finds a hidden room that skips most of the level. |
+| 1-2 | <span style="green">Yes</span> | There is a narrow section that requires Mario to wait until enemies pass through, contrary to the general policy of “moving right”. The agent consistently passes this level, usually without finding the [Warp Zone](https://www.mariowiki.com/Warp_Zone) until much later on. |
+| 1-3 | <span style="red">No</span> | The end of the level uses slightly different tiles, which confuse the feature detector. That part trains slowly, since it has to beat most of the level to get there. The agent should be able to beat this level with more data and time. |
+| 1-4 | <span style="green">Yes</span> | The first bowser castle, introducing spinning traps and the "fake Bowser".|
+| 2-2 | <span style="red">Yes</span> | The first water level uses a different movement mechanic and homing enemies ([Blooper](https://www.mariowiki.com/blooper)). The agent can pass the level, however it is very rare. It struggles against choke points guarded by Bloopers. |
+| 2-3 | <span style="red">No</span> | Mario must cross a long bridge while being constantly assaulted by flying fish ([Cheep Cheeps](https://www.mariowiki.com/Cheep_Cheep)). The agent can make it to the three small platforms before dying. The agent should be able to beat this level with more data and time. |
+| 2-4 | <span style="red">Yes</span> | The second bowser castle, with more danger and an obstacle that makes it harder to jump over Bowser. The agent can beat this level, but it is rare. It usually bumps into Bowser. |
+| 3-4 | <span style="red">Yes</span> | The third bowser castle, with a more restrictive blockade at Bowser and more dangerous traps. Again, while Mario can beat this level, it is rare as he dies often to Bowser. |
+| 4-1 | | Introduction of Lakitu, who follows Mario and throws Spiny Eggs to deter him. The agent can consistently beat this level. |
+| 8-3 | <span style="red">No</span> | The second last level, which contains an assortment of enemies. Koopas, Bullet Bills, Hammer Bros and Pirana Plants. I suspect this level could be beaten if I used more parallel environments and bigger batch sizes. |
+| 8-4 | <span style="red">No</span> | The final level, which contains a water section and a non-linear map. There is a specific route Mario must follow, or else it gets sent back in the level. Mario is able to get past the first loop, but he never gets far after that. |
 
 You can download code used to train the agent from [TODO: Create a Github repository and add the link here]().
 
@@ -51,13 +53,13 @@ You can download code used to train the agent from [TODO: Create a Github reposi
 
 There are a few interesting behaviors common to all levels:
 
-* The agent alternates between running and sprinting (Holding B). The variation in speed is less predictable than maintaining a constant speed, which increases its surprisal.
+* The agent alternates between running and sprinting (Holding B). The variation in speed makes future states harder to predict over than maintaining a constant speed.
 
 * Sometimes the network degenerates into a bad policy, staying still or getting stuck at a wall. These generally resolve themselves
 
 * Once the agent completes a level, it does not consistently complete the level. There is no explicit reward for doing so, and it may temporarily find higher surprisals in paths that do not complete the level.
 
-* We expected a "wall" of surprisals for pixels at the right edge of the screen, since new parts of the level that scroll into view are unpredictable. However, the Inverse Dynamics network doesn't use the edge of the screen to predict actions taken, so the Forward Dynamics network doesn't see features of it.
+* We expected a "wall" of surprisals for pixels at the right edge of the screen, as new parts of the level that scroll into view are unpredictable. However, the Inverse Dynamics network doesn't use the edge of the screen to predict actions taken, so the Forward Dynamics network cannot operate on those pixels.
 
 ## Concepts
 
@@ -84,7 +86,7 @@ To play a level of Mario, the trained agent repeatedly:
 
 The state is not a single frame. In Mario, it's important to hold the jump button to make a higher jump. So when the agent sends an action, it is held for 15 frames. We collect the 5th, 10th and 15th frame; resize, crop, and grayscale them; and then stack them to create the state.
 
-The resized frames have a width and height of 84 and 110. The top 18 and bottom 8 pixels are cropped: The top 18 pixels only contain the score, lives, and coin counter; and the bottom 8 pixels contain nothing of value. The NES has a low number of colors, so grayscaling doesn't lose anything important and reduces the size of the input. After stacking 3 frames, our state becomes 84 x 84 x 3.
+The resized frames have a width and height of 84 and 110. The top 18 and bottom 8 pixels are cropped: The top 18 pixels only contain the score, lives, and coin counter; and the bottom 8 pixels contain nothing of value. The NES has a low number of colors, so grayscaling doesn't drop important information and reduces the size of the input. After stacking 3 frames, our state becomes 84 x 84 x 3.
 
 We choose to use stacked frames rather than single frames for these reasons:
 * The Mario sprite frequently changes while walking. Our network is not recurrent, so it has no memory of the past. So it has no way to determine if the sprite will change in the next frame, and will always be surprised. The 5-frame gap causes the sprite to change every sample, so it is not surprising.
@@ -93,9 +95,9 @@ We choose to use stacked frames rather than single frames for these reasons:
 * 3 frames allows our agent to approximate Mario’s velocity and acceleration. The velocity distinguishes between rising and falling sprites. The acceleration might be helpful determining whether it can jump over obstacles.
 * The OpenAI paper stacked 4 frames with 3 frame gaps. We use a 3-stack to help visualize the state: Each greyscale frame can be assigned to the Red, Green, or Blue color channel. It didn't seem to decrease network performance.
 
-After the state is created, it is **Normalized**. The state represents pixels as grayscale values in the range [0,255]. The normalized state is instead centered around 0 and divided by the `std`([**Standard Deviation**](https://en.wikipedia.org/wiki/Standard_deviation)). This gives better results than another common way of normalizing pixels: Subtracting by 127.5 and dividing by 255.
+After the state is created, it is **Normalized** by subtracting the **mean state** and dividing by the **mean std**([**Standard Deviation**](https://en.wikipedia.org/wiki/Standard_deviation)). This gives better results than another common way of normalizing pixels: Subtracting by 127.5 and dividing by 255.
 
-Mean and std are calculated over 10,000 random moves at the beginning of level 1-1. Each pixel in the state has its own mean, but the standard deviation is averaged to produce a single number.
+The mean state and mean std are calculated from the collected states from making 10,000 random moves at the beginning of the level. Each pixel in the state has its own mean, but the standard deviation is averaged to produce a single number. Here are a few images showing what mean states looks like [TODO]().
 
 ### Surprisal vs Reward
 
@@ -107,15 +109,15 @@ An action changes a state. All differences between the old and new state can be 
 
 and this is ordered from largest to smallest expected change. Larger changes are harder to predict, so a level change should be more interesting than a slightly displaced Goomba.
 
-Dying gives a large surprisal, comparable to entering a new level: There is a very large surprisal when the screen goes black, followed by another large surprisal when the level restarts. So using surprisal as a reward would lead the agent to intentionally die as quickly as possible.
+Dying gives a large surprisal, comparable to entering a new level: There is a very large surprisal when the screen goes black, followed by another large surprisal when the level restarts. So using surprisal as a reward would incentivize the agent to choose death when it is otherwise avoidable.
 
 This is undesirable, but can be avoided using a different reward.
 
 The reward for an initial state $$\text{state}(0)$$ is defined inductively as:
 * The environment is measured as $$\text{state}(0)$$
-* The model produces an action $$\text{action}(0)$$ and an expected state $$\text{guess}(0)$$
+* The model produces an action $$\text{action}(0)$$ and an expected state $$\text{guess}(1)$$
 * $$\text{action}(0)$$ is sent to the environment to advance it to $$\text{state}(1)$$
-* The difference between $$\text{state}(1)$$ and $$\text{guess}(0)$$ is $$\text{surprisal}(0)$$
+* The difference between $$\text{state}(1)$$ and $$\text{guess}(1)$$ is $$\text{surprisal}(0)$$
 
 This can be repeated with $$\text{state}(1)$$ to produce $$\text{surprisal}(1)$$. If we let the agent iterate like this infinite times, we will get an infinite stream of surprisals.
 
@@ -129,7 +131,7 @@ $$
 \end{split}
 $$
 
-where the discount is a number between 0 and 1.[^4] Since $$\text{discount}^n$$ converges to 0 as $$n$$ increases, distant surprisals have less impact than closer ones. Our code only calculates 128 surprisals, so the actual reward is slightly different - see the [Reward](#reward) section for details.
+where the discount is a number between 0 and 1.[^4] Since $$\text{discount}^n$$ converges to 0 as $$n$$ increases, distant surprisals have less impact than closer ones. We can't keep infinite states and guesses in memory, so the actual reward is slightly different - see the [Reward](#reward) section for details.
 
 With this reward, the network isn't as incentivized to die. It still gets a large surprisal on death, but since it reenters the same level all other surprisals will be close to zero. So the strategy of "moving right" is preferred over dying, and in Mario that is usually enough to beat the level.
 
@@ -146,7 +148,7 @@ Policy (PPO)
 * During training, prevents the **Trajectory** from changing too fast. The trajectory is the sequence of states produced by following this policy.
 
 Inverse Dynamics
-* A [**Convolutional Neural Network**(CNN)](https://en.wikipedia.org/wiki/Convolutional_neural_network) maps states to **Feature Vectors**. A feature vector is 512 floating point numbers that measure whatever the network learns is useful. This CNN is named the **Feature Mapper**.
+* A [**Convolutional Neural Network**(CNN)](https://en.wikipedia.org/wiki/Convolutional_neural_network) maps states to **Feature Vectors**. A feature vector is 512 floating point numbers, each representing an abstract pixel texture that the network deems useful. This CNN is named the **Feature Mapper**.
 * The inputs to this network are two consecutive states. Both states are mapped to feature vectors, and the output is a prediction of which action was taken.
 * Since we are providing two consecutive states, we already know which action was taken. The true purpose of this network is to train the Feature Mapper.
 
@@ -166,11 +168,12 @@ A **Trajectory** is the collection of `(state, action)` pairs gathered during a 
 
 A **Rollout** is the trajectory along with many metrics calculated from the collected information, such as the `surprisal(i)` values.
 
-Because the policy includes a small amount of randomness, multiple Mario environments run in parallel to collect data. All environments use the same neural network to infer action and metrics. During training, we repeatedly sample one or more rollouts as mini-batches. We used 8 parallel environments, one rollout per mini-batch, and we train on all 8 mini-batch 3 times for a total of 24 mini-batches per episode. Training only uses the rollout from the current episode, so we don’t need to keep the rollouts for future updates.
+Since the surprisal is defined using the next state we actually need 129 states as input. The very last state is called the **tail state** and is not trained on.
 
-Performance increases with bigger batches, which requires more data. The original paper uses 128 to 2024 parallel environments and noticeably outperforms our experiments. There should be a limit to how large a batch can usefully be: If there was no randomness, every environment would produce the same result. So as the network becomes more confident in its next move, it gathers less unique data.
+Because the policy includes a small amount of randomness, we can run multiple Mario environments in parallel to collect diverse data. All environments use the same neural network to infer action and metrics. During training, we repeatedly sample one or more rollouts as mini-batches. We used 8 parallel environments, one rollout per mini-batch, and we train on all 8 mini-batch 3 times for a total of 24 mini-batches per episode. Training only uses the rollout from the current episode, so we don’t need to keep the rollouts for future updates.
 
-An episode runs for 128 states, but since the surprisal is defined using the next state we actually need 129 states as input. The very last state is called the "tail state" and is not fully-trained.
+If the batches only contains a small subsection of the level, then the network update can cause the policy to become ill-fit to pass the parts of the level that were not seen in the batch. As a result, performance increases with bigger batches, which requires more data. The original paper uses 128 to 2024 parallel environments and noticably outperforms our experiments.
+
 
 ### Dynamics
 
@@ -275,8 +278,6 @@ entropy_{loss} &= (- 0.001) * \sum_i p_i * (log(total) - advantage_i)
 \end{align}
 $$
 
-The `entropy_loss` is calculated per-batch, and these are averaged to produce the final entropy loss.
-
 Entropy is minimized when every action is equally preferred, and increases as the network develops stronger preference for certain actions over others.
 
 As the network trains, the `reward_loss` and `pg_loss` will increase by orders of magnitude while the `entropy_loss` stays roughly the same. So the effect of entropy diminishes as the network learns.
@@ -291,7 +292,7 @@ The next article here will explore training an agent that trains a model of a sy
 
 ### Footnotes
 
-[^1]: Levels 4-4 and 8-4 require the player to take a specific route, or else is reset to an earlier point in the level. The agent can't solve the puzzle, so it eventually decides jumping into a lava pit is more interesting than walking around making no progress.
+[^1]: Levels 4-4 and 8-4 require the player to take a specific route, or else is reset to an earlier point in the level without an obvious screen transition.
 [^2]: Both [OpenAI Gym](https://gym.openai.com/) and a [Custom Emulator](https://www.michaelburge.us/2019/03/18/nes-design.html) are supported targets. All video footage was recorded with the custom emulator.
 [^3]: Maximizing `action_score * advantage` is the same as minimizing `action_score * -advantage`, which is what you see in the graph. Optimizers are typically written to minimize a value.
 [^4]: In our case, we choose discount = 0.99.
