@@ -12,9 +12,9 @@ js_files:
 
 ---
 
-[Super Mario Bros](https://en.wikipedia.org/wiki/Super_Mario_Bros.) is a video game released for the [Nintendo Entertainment System(NES)](https://en.wikipedia.org/wiki/Nintendo_Entertainment_System) in 1985. We replicate a paper from members of [OpenAI and UC Berkeley](https://arxiv.org/abs/1808.04355), creating agents that learn to solve many levels in this game[^1].
+[Super Mario Bros](https://en.wikipedia.org/wiki/Super_Mario_Bros.) is a video game released for the [Nintendo Entertainment System(NES)](https://en.wikipedia.org/wiki/Nintendo_Entertainment_System) in 1985. We replicate a paper from members of [OpenAI and UC Berkeley](https://arxiv.org/abs/1808.04355), creating agents that learn to solve many levels in this game.
 
-The central idea is to use **Curiosity** as a reward. The agent
+The central idea is to use **Curiosity** as a reward[^1]. The agent
 * Attempts to predict future states
 * Prefers to enter states that it's unable to predict well.
 
