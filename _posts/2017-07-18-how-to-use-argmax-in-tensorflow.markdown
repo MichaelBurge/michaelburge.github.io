@@ -123,7 +123,7 @@ sess = tf.InteractiveSession()
 x = tf.random_uniform([32, 32, 3 ], maxval=255, dtype=tf.int32).eval()
 
 # Use argmax to calculate which color has the largest value. Shape = [32, 32]
-indices = ??? 
+indices = ???
 
 # Use meshgrid and stack to generate coordinates for dimensions except the color, and then add our color indices to the end. Shape = [32, 32, 3]
 coords = ???
