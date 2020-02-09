@@ -25,7 +25,7 @@ twitter_usernames:
 # Build settings
 markdown: kramdown
 #theme: main
-plugins:
+plugins_dir:
   - jekyll-feed
   - jekyll-sitemap
 
@@ -45,11 +45,11 @@ defaults:
 # Exclude from processing.
 # The following items will not be processed, by default. Create a custom list
 # to override the default setting.
-# exclude:
-#   - Gemfile
-#   - Gemfile.lock
-#   - node_modules
-#   - vendor/bundle/
-#   - vendor/cache/
-#   - vendor/gems/
-#   - vendor/ruby/
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
