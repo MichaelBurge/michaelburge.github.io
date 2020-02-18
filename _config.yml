@@ -20,7 +20,7 @@ description: Articles on software development
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "http://www.michaelburge.us" # the base hostname & protocol for your site, e.g. http://example.com
 twitter_usernames:
-  - TheMichaelBurge
+  - MichaelBurge_
 
 # Build settings
 markdown: kramdown
@@ -40,7 +40,7 @@ defaults:
   - scope:
       path: "_posts"
     values:
-      bio: 'Michael Burge has years of experience developing complex software, including custom compilers, data stores for "big data", and improving website performance. Take advantage of his extensive knowledge and experience; <a href="mailto:michaelburge@pobox.com">Hire Michael</a> for your big project today.'
+      bio: 'Michael Burge has years of experience developing complex software, including custom compilers, data stores for "big data", and machine learning models.'
 
 # Exclude from processing.
 # The following items will not be processed, by default. Create a custom list
