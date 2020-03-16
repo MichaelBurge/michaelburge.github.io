@@ -1,7 +1,7 @@
 ---
 layout: post
 author: Michael Burge
-title: "The Complete Guide to Rust's Borrow Checker"
+title: "Borrow Checker Concept Catalog"
 started_date: 2020-02-01 20:00:04 -0700
 date: 2020-02-01 20:00:04 -0700
 tags:
@@ -36,11 +36,11 @@ fn foo<T>(x:T) {
 }
 {% endhighlight %}
 
-A variable **Owns** data if it is responsible for its allocation, destruction, and deallocation. When a variable of type `T` is created(through a `let` binding or pattern match), [`size_of::<T>()`](https://doc.rust-lang.org/std/mem/fn.size_of.html) bytes are allocated. All variables are [stack-allocated](https://doc.rust-lang.org/stable/reference/variables.html) in Rust, though types may contain references or pointers to heap-allocated memory.
+A variable **Owns** data if it is responsible for its allocation, initialization, destruction, and deallocation. When a variable of type `T` is created(through a `let` binding or pattern match), [`size_of::<T>()`](https://doc.rust-lang.org/std/mem/fn.size_of.html) bytes are allocated. All variables are [stack-allocated](https://doc.rust-lang.org/stable/reference/variables.html) in Rust, though types may contain references or pointers to heap-allocated memory. Allocation and deallocation occur all-at-once, initialization occurs in order of declaration, and destruction occurs in reverse order of creation.
 
-Every variable has a `(creation_time, expiration_time)` pair associated with it - its **Scope**. A **Lexical Scope** is the scope associated with a [**Block**](https://doc.rust-lang.org/stable/reference/expressions/block-expr.html) when it is entered and exited. All scopes are bounded by a **Lexical Scope**[^1]. A variable is **Live** between creation and expiration.
+Every variable has an `(creation_time, deallocation_time)` pair associated with it[^4] - its **Scope**. A **Lexical Scope** is the scope associated with a [**Block**](https://doc.rust-lang.org/stable/reference/expressions/block-expr.html) when it is entered and exited. All scopes are bounded by a **Lexical Scope**[^1]. A variable is **Live** between creation and expiration.
 
-The data that a variable owns may **Reference** data owned by a different variable. That data had better not have been destructed or deallocated when the reference is used, leading to rule #1:
+A variable may own data that **References** data owned by a different variable. That data had better not have been deallocated when the reference is used, though it may have been destroyed. This leads to rule #1:
 
 ### **Rule 1:** A live reference must refer to live data.
 
@@ -60,9 +60,26 @@ fn foo() {
 }
 {% endhighlight %}
 
+However, it is sound to create a live reference to a dropped but not deallocated variable:
+{% highlight rust %}
+struct Foo;
+impl Drop for Foo {
+    fn drop(&mut self) { println!("foo") }
+}
+
+fn main() {
+    let mut f = Foo;
+    unsafe { std::ptr::drop_in_place(&mut f) };
+    // &mut f is a reference to a dropped variable
+    unsafe { std::ptr::drop_in_place(&mut f) };
+    drop(f);
+}
+{% endhighlight %}
+
+
 The braces `{}` define a Lexical Scope. Variables created within such a scope are also destroyed before that scope ends. So `shared` would reference the deallocated `owned` if this were allowed.
 
-Ownership is tied to a specific variable, not the data:
+Ownership is tied to variables, not to the storage cells they refer to[^5]:
 {% highlight rust %}
 fn use_variable<T>(t:T) { }
 
@@ -73,11 +90,11 @@ fn foo<T>(owned:T) {
 }
 {% endhighlight %}
 
- In the following, `owned` and `transferred` could share the same storage cell since their lifetimes are sequential: They have no gaps and don't overlap. A reference to that cell would be valid at all times. But the snippet is rejected because the transfer of ownership applies to the variables, not to the minimized assignment of storage cells.
+ `owned` and `transferred` could share the same storage cell since their lifetimes are sequential: They have no gaps and don't overlap. A reference to that cell would be valid at all times. But the snippet is rejected because the transfer of ownership applies to the variables, not to the minimized assignment of storage cells.
 
-Rust differs from other languages with references by also distingishing **Shared** and **Exclusive** references. This leads to the second rule:
+Rust differs from other languages with references by also distinguishing **Shared** and **Exclusive** references:
 
-### **Rule 2:** A live exclusive reference is the only live reference to its storage cell.
+### **Rule 2:** A live exclusive reference is the only live reference to its variable
 
 Shared references only allow reads, while exclusive references allow reads and writes. This isn't required for correctness: There are many ways to safely modify a storage cell through a shared references. These are covered in the section on **Interior Mutability**.
 
@@ -354,8 +371,6 @@ Every CPU trace then satisfies the borrow checker: The "exclusive lock" on a hyp
 
 Since the program trace satisfies the borrow checker, it is natural that its source representation should also satisfy the borrow checker.
 
-
-
 ## Common Scenarios
 
 This section gives a list of common compilation errors and techniques to resolve them.
@@ -478,13 +493,70 @@ A type like `Option<T>` has a good placeholder value to prevent this: `None`. If
 
 ### Circular References
 
-#### Solution 5: Use an Arena
+#### Solution 19: Use `unsafe`
 
-There is a 3rd-party library providing the `Arena` and `TypedArena` types. These are containers that deallocate all objects "at the same time", allowing them to maintain references to each other.
+Circular references aren't impossible, but require the `unsafe` keyword. Here's an example:
 
 {% highlight rust %}
-INCLUDE SAMPLE CODE SOLVING CPUPPUINTERCONNECT USING AN ARENA
+use core::fmt::Debug;
+
+struct Foo<'a, T>(T, Option<&'a Foo<'a, T>>);
+impl<T: Debug> Debug for Foo<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "*{:p} = Foo({:?}, {:p})", self, self.0, self.1.unwrap())
+    }
+}
+
+unsafe fn to_ref<'a, T>(ptr:*const T) -> &'a T { std::mem::transmute(ptr) }
+
+fn foo<'a, T: Debug>(t:T) -> Foo<'a, T> {
+    let mut x = Foo(t, None);
+    unsafe { x.1 = Some(to_ref(&x)) };
+    println!("{:?}", x);
+    return x;
+}
+
+fn main() {
+    println!("{:?}", foo(5));
+}
 {% endhighlight %}
+
+Within the call to `foo`, `x` is a circular value. However, it is erroneous to return it: The pointer `x.1` will not be updated to its new location, so it will point to stale data.
+
+This example demonstrates this with two print calls: A correct circular value will print both pointers the same, `foo` does so, and `main` prints them different. So `foo(5)` is an invalid value, because `foo(5).1` points to freed memory.
+
+#### Solution 5: Use a custom allocator
+
+While circular references will require unsafe code at some point, there are many custom allocators for Rust. One example is the [`typed-arena`](https://docs.rs/typed-arena/2.0.1/typed_arena/) library, which lets you allocate many object 1. All of the same type and 2. All with the same lifetime.
+
+Creating cycles with variables is impossible because one variable will be destroyed before the other. So for a brief moment, a reference will exist to a deallocated object. If the type implements `Drop`, the destructor could use this reference to access destroyed memory.
+
+There is an existing [`rustc` compiler test](https://github.com/rust-lang/rust/blob/1.31.1/src/test/compile-fail-fulldeps/dropck_tarena_unsound_drop.rs) for this behavior.
+
+Another example is [`bumpalo`](https://docs.rs/bumpalo/3.2.0/bumpalo/), which allows circular `Drop` types by not calling `Drop` automatically at all.
+
+ It's hard to improve on the compiler's rules for generic types, but if you know what your types do on `Drop`(say, using a marker trait or bound), then writing your own allocator gives you the freedom to destroy types however you like. All of the following can be legal Rust:
+ * Not `Drop`ing an object
+ * Use-after `Drop`
+ * Double-`Drop`
+ * Reference to a `Drop`ed object
+ 
+For example, this is legal:
+{% highlight rust %}
+struct Foo;
+impl Drop for Foo {
+    fn drop(&mut self) { println!("foo") }
+}
+
+fn main() {
+    let mut f = Foo;
+    unsafe { std::ptr::drop_in_place(&mut f) };
+    unsafe { std::ptr::drop_in_place(&mut f) };
+    drop(f);
+}
+{% endhighlight %}
+
+If instead of `Foo`, you tried to make a generic container of type `T`, you'd run into trouble for `T=Box`. Since `Box`'s `Drop` frees memory, double-dropping a `Box` specifically is undefined behavior.
 
 ### Two Logical Owners
 
@@ -498,7 +570,7 @@ There is also a thread that runs in the background. Even if nobody visits the we
 
 A reference-counted type like `Rc` or `Arc` solve this problem. They implement `Clone` by increasing a reference count, and `Drop` by decreasing it. So both the web interface and the background task can be given a `clone` of the data.
 
-However, it's not possible for either service to mutate through a reference-counted type: These types only provide a shared reference, because exclusive access requires there to be exactly 1 owner. To solve this, you can store an interior-mutability[Include link to Interior Mutability section] type to elevate the shared reference to an exclusive one. Since `Arc` is usually used in multi-threaded contexts(like a website and background task on separate threads), usually `Mutex` or `RwLock` are used.
+However, it's not possible for either service to mutate through a reference-counted type: These types only provide a shared reference, because exclusive access requires there to be exactly 1 owner. To solve this, you can store an [interior-mutable](#solution-2-interior-mutability) type to elevate the shared reference to an exclusive one. Since `Arc` is usually used in multi-threaded contexts(like a website and background task on separate threads), usually `Mutex` or `RwLock` are used.
 
 `Arc` exists in other languages. C++ has `shared_ptr` for example. However, Rust is unique in safely providing `Rc`, which only works in single-threaded context. The traits `Send` and `Sync` mark which types can or cannot be safely sent across threads, and `Rc` does not implement these. `Rc` is faster than `Arc` and you'll never accidentally misuse it without using `unsafe`. But don't be afraid to use `Arc` if it solves a problem.
 
@@ -590,7 +662,7 @@ fn good_foo<T>(mut t:T) {
 
 Note that it would be undefined behavior to use the pointer to create two `&mut T` that are both live at the same time. In `use_variables`, the `&mut T`s each expire at the end of the `use_variable` statement, so at most one is alive.
 
-#### Anchor Lifetimes
+#### Solution 9: Anchor Lifetimes
 
 Pointers not only lose the exclusivity constraint, but also the lifetime of the data they point to. You can use an **Anchor Lifetime** to match a pointer to an existing variable:
 
@@ -610,9 +682,9 @@ fn foo<'a, 'b, T>(cond:bool, ptr:*const T, _l1:&'a T, _l2:&'b T) -> Either<'a, '
 
 You don't have to match a `*const T` or `*mut T` with a `&T` or `&mut T`. It's probably a mistake if you use `&mut` as an anchor lifetime, unless you're using it like a compile-time mutex: Since there can be many `*mut T` and only one `*&mut T`, it's tempting to use another `&mut` to avoid accidentally creating two. But if the pointer is derived in any way from the anchor, this would generate undefined behavior. So in practice, nobody uses `&mut` as an anchor.
 
-#### Solution 9: Narrow the writes
+#### Solution 10: Narrow the writes
 
-As discussed in section [TODO: Link to "Program Traces"](), a program trace always satisfies the borrow checker.
+As discussed in section [Program Traces[#program-traces], a program trace always satisfies the borrow checker.
 
 So if you write a program which claims to require multiple exclusive references to data, it is interesting to consider that the execution of this program will not. So, it is worth considering how this "extraneous" exclusive reference is required.
 
@@ -626,7 +698,7 @@ Examples of problematic interactions include: Panics(if using `RefCell`), deadlo
 
 If the writers are on separate threads, you'll want either a `Mutex` or `RwLock` somewhere in your program. They will take an explicit lock, preventing the other thread from executing.
 
-#### Solution 10: Delay the writes
+#### Solution 11: Delay the writes
 
 In a game, you might have 10 different objects that want to create a projectile. They all want to write to the global projectile store as a result. You don't want them to take an exclusive lock `&mut`, because this forces them all to execute sequentially rather than in parallel.
 
@@ -653,7 +725,7 @@ This doesn't really matter, because dropping `f` won't invoke any destructor tha
 
 There are 5 ways to accomplish this:
 
-#### Solution 11: Use `drop`
+#### Solution 12: Use `drop`
 
 {% highlight rust %}
 fn foo<T>(x:T) {
@@ -666,7 +738,7 @@ fn foo<T>(x:T) {
 }
 {% endhighlight %}
 
-#### Solution 12: Reverse variable declarations
+#### Solution 13: Reverse variable declarations
 
 Reversing the order of `flag` and `f` causes `flag` to be dropped after `f`:
 
@@ -682,7 +754,7 @@ Note that I switched the function to a shared reference here.
 
 {% endhighlight %}
 
-#### Solution 13: Using `FnOnce`
+#### Solution 14: Using `FnOnce`
 
 This trait's `call` causes ownership to be consumed, dropping the value and releasing the lock.
 
@@ -709,7 +781,7 @@ fn foo<T>(x:T) {
 }
 {% endhighlight %}
 
-#### Solution 14: Using a scope to force destruction
+#### Solution 15: Using a scope to force destruction
 
 Here, the explicit scope forces `f` to be destroyed right after it's used.
 {% highlight rust %}
@@ -752,7 +824,7 @@ fn foo<T>(x:T) {
 
 If you're defining a single function that has distinct borrow sections(like slight variations on the same unit test), put each section in its own scope to ensure borrows don't leak between each section.
 
-#### Solution 15: Reorder arguments.
+#### Solution 16: Reorder arguments.
 
 There is a deterministic destruction order within a statement. The `;` is the **Statement Separator** but also marks **Sequence Points**. Between each sequence point, the following occurs:
 * Storage for scoped variables is reserved
@@ -829,15 +901,19 @@ Example 1 is very similar, but is accepted because the storage for that temporar
 Example 3 is accepted because the temporary is moved into `command`, which remains valid for the entire scope.
 
 The below example demonstrates the order destructors run relative to the other stages:
-[Include example where implementing Drop causes code to fail to compile]
+[TODO: Include example where implementing Drop causes code to fail to compile]
 
 All of these experiments are explained by the initial model I provided.
 
 ### Lifetime Issues
 
-#### Solution 16: Mark additional lifetime variables
+#### Solution 17: Mark additional lifetime variables
 
 Rust generally infers the correct borrow-set for a lifetime variable, but isn't very good at determining how many independent lifetimes there should be.
+
+Errors like these are common when returning trait objects(`dyn Trait` or `impl Trait`) values. Add an explicit lifetime `'b` or fresh anonymous lifetime `'_` to the bound.
+
+##### Hidden trait lifetimes
 
 {% highlight rust %}
 pub struct Foo<'b>(&'b u8);
@@ -871,9 +947,61 @@ impl<'b> Foo<'b> {
 }
 {% endhighlight %}
 
-Errors like these are common when returning `impl Trait` values. Add an explicit lifetime `'b` or fresh anonymous lifetime `'_` to the bound.
+##### References in traits
 
-#### Solution 17: Return an owned wrapper object
+[Any references in a trait object are assumed to be `'static`](https://doc.rust-lang.org/reference/lifetime-elision.html#default-trait-object-lifetimes).
+
+{% highlight rust %}
+trait Foo{}
+struct X<'a>(&'a u8);
+impl Foo for X<'_> {}
+
+// ERROR - Cannot infer an appropriate lifetime
+fn bar(x:&u8) -> impl Foo { X(x) }
+// ERROR - Explicit lifetime required in type of x
+fn baz(x:&u8) -> Box<dyn Foo> { Box::new(X(x)) }
+
+fn bar_good(x:&u8) -> impl Foo + '_ { X(x) }
+fn baz_good(x:&u8) -> Box<dyn Foo + '_> { Box::new(X(x)) }
+{% endhighlight %}
+
+It's unclear why `impl` can't default to the standard lifetime elision rules: This behavior is not documented in the reference for `impl`, though an [`RFC`](https://github.com/rust-lang/rfcs/blob/master/text/1951-expand-impl-trait.md#scoping-for-type-and-lifetime-parameters) mentions it.
+
+##### Async/await
+
+Lifetimes in functions use the lifetime elision rules. But there's an exception for trait objects. But futures - despite being trait objects - [have their own exception](https://github.com/rust-lang/rfcs/blob/master/text/2394-async_await.md#lifetime-capture-in-the-anonymous-future).
+
+In particular, `bar` in the following example compiles but the equivalent `baz` errors because of the implicit `'static`:
+{% highlight rust %}
+use futures::Future;
+use core::pin::Pin;
+use core::task::{Context, Poll, Waker};
+async fn foo() { unimplemented!() }
+async fn bar(x:&u8) -> u8 {
+    foo().await;
+    return *x;
+}
+
+fn baz(x:&u8, waker:&Waker) -> impl Future<Output = u8> {
+    struct BazFuture<'a>(&'a u8);
+    impl Future for BazFuture<'_> {
+        type Output = u8;
+        fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+            return Poll::Ready(*self.0);
+        }
+    };
+    let foo_fut = Box::pin(foo()).as_mut();
+    let ctx = Context::from_waker(waker);
+    while let Poll::Pending = foo_fut.poll(&mut ctx) { }
+    return BazFuture(x);
+}
+{% endhighlight %}
+
+[This blog post](https://tmandry.gitlab.io/blog/posts/optimizing-await-1/) also mentions a compiler-internal `'self` lifetime that is used by the optimizer for `async` generators. It's not possible to access in surface-level Rust, but I mention it for completeness.
+
+The [Async Book](https://rust-lang.github.io/async-book/03_async_await/01_chapter.html) has several more examples of lifetime issues regarding `async` functions.
+
+#### Solution 18: Return an owned wrapper object
 
 Consider the following argument:
 1. A reference `&T` can never be null.
@@ -961,7 +1089,7 @@ fn foo() {
 
 so if a `Deref` owns a temporary, you still can't return a reference to it: You'll need to return that `Deref` or one derived from it:
 
-{% highlight %}
+{% highlight rust %}
 use std::cell::{RefCell, Ref};
 use std::ops::Deref;
 
@@ -981,167 +1109,30 @@ impl<T> Foo<T> {
 
 {% endhighlight %}
 
-## Case Studies
+#### `async move`
 
-This section contains realistic scenarios I've encountered writing Rust, and how I used the above rules to reason through them.
-
-### NES Emulator
-
-My NES emulator had a shared data bus between two hardware components: The CPU and PPU. When the CPU read or wrote to specific memory addresses, those referenced registers on the PPU or initiated a transfer of data from the CPU to the PPU.
+Sometimes you want to return a future, but it has references to local data:
 {% highlight rust %}
-struct CpuPpuInterconnect {
-  cpu: *mut Cpu,
-  ppu: *mut Ppu,
-}
-struct Cpu{shared_bus: CpuPpuInterconnect}
+struct Image;
+async fn download(url:&str) -> Vec<u8> { unimplemented!() }
+async fn parse_image(bytes:&Vec<u8>) -> Image { unimplemented!() }
+async fn display_image(image:&Image) { unimplemented!() }
 
-struct Ppu;
-fn copy(ic:&CpuPpuInterconnect) {
-  let cpu:&Cpu = unsafe { &*ic.cpu };
-  let ppu:&mut Ppu = unsafe { &mut *ic.ppu };
-  ppu.write(cpu.read());
-}
-
-impl Cpu { fn read(&self) -> u8 { unimplemented!() } }
-impl Ppu { fn write(&mut self, x:u8) { unimplemented!() } }
-{% endhighlight %}
-
-This is simplified from the original code. Here, the `CPU` holds a `CpuPpuInterconnect`, which holds a pointer back to the `CPU`. Accessing the `CPU` requires `unsafe` to dereference the pointer.
-
-The question is: How can this be modeled in standard Rust without using any unsafe code?
-
-* **Step 1**: Remove unnecessary `mut` qualifiers.
-
-The `cpu` field is a `*mut Cpu`, but it is only used as input to `read` which takes a `&Cpu`. Since it's okay to have multiple shared references, we should first convert it to a `*const Cpu`:
-
-{% highlight rust %}
-struct CpuPpuInterconnect {
-  cpu: *mut Cpu,
-  ppu: *mut Ppu,
-}
-struct Cpu{shared_bus: CpuPpuInterconnect}
-
-struct Ppu;
-fn copy(ic:&CpuPpuInterconnect) {
-  let cpu:&Cpu = unsafe { &*ic.cpu };
-  let ppu:&mut Ppu = unsafe { &mut *ic.ppu };
-  ppu.write(cpu.read());
-}
-
-impl Cpu { fn read(&self) -> u8 { unimplemented!() } }
-impl Ppu { fn write(&mut self, x:u8) { unimplemented!() } }
-{% endhighlight %}
-
-* **Step 2**: Convert pointer to shared reference
-
-`CpuPpuInterconnect` has a reference that must live as long as the `Cpu`. This is specified using a lifetime parameter. And because `Cpu` owns the interconnect, it must take its own lifetime as a parameter.
-
-{% highlight rust %}
-struct CpuPpuInterconnect<'a> {
-  cpu: &'a Cpu<'a>,
-  ppu: *mut Ppu,
-}
-struct Cpu<'a>{shared_bus: CpuPpuInterconnect<'a>}
-
-struct Ppu;
-fn copy(ic:&CpuPpuInterconnect) {
-  let cpu:&Cpu = ic.cpu;
-  let ppu:&mut Ppu = unsafe { &mut *ic.ppu };
-  ppu.write(cpu.read());
-}
-
-impl<'a> Cpu<'a> { fn read(&'a self) -> u8 { unimplemented!() } }
-impl Ppu { fn write(&mut self, x:u8) { unimplemented!() } }
-{% endhighlight %}
-
-One difficulty is in actually constructing the `CpuPpuInterconnect` here. The below seems to work:
-
-{% highlight rust %}
-fn main() {
-  let mut cpu:Cpu;
-  let mut ppu = Ppu;
-  let ic = CpuPpuInterconnect {
-    cpu: unsafe { std::mem::uninitialized() }, // DANGER
-    ppu:&mut ppu,
+fn do_all() -> impl std::future::Future<Output = ()> {
+  let url = "google.com/favicon";
+  // ERROR - async has a reference to url
+  let do_all = async {
+     let bytes = download(url).await;
+     let image = parse_image(&bytes).await;
+     display_image(&image).await;
   };
-  cpu = Cpu{shared_bus: ic };
-  unsafe {
-    let dest:*mut &Cpu = &mut cpu.shared_bus.cpu;
-    std::ptr::write(dest, &cpu);
-  };
+  return do_all;
 }
 {% endhighlight %}
 
-but `ic.cpu` is probably not allowed to be uninitialized even though it's never read from.
+Replace `async` with `async move` and the example compiles. `async move` creates a temporary data structure much like `Foo` is the previous example, and `url` is moved into this structure.
 
-Here, it's easier to use an option type:
-
-{% highlight rust %}
-struct CpuPpuInterconnect<'a> {
-  cpu: Option<&'a Cpu<'a>>,
-  ppu: *mut Ppu,
-}
-struct Cpu<'a>{shared_bus: CpuPpuInterconnect<'a>}
-
-struct Ppu;
-fn copy(ic:&CpuPpuInterconnect) {
-  let cpu:&Cpu = ic.cpu();
-  let ppu:&mut Ppu = unsafe { &mut *ic.ppu };
-  ppu.write(cpu.read());
-}
-
-impl<'a> Cpu<'a> { fn read(&'a self) -> u8 { unimplemented!() } }
-impl Ppu { fn write(&mut self, x:u8) { unimplemented!() } }
-impl<'a> CpuPpuInterconnect<'a> {
-  pub fn cpu(&'a self) -> &'a Cpu<'a> { self.cpu.as_ref().unwrap() }
-}
-fn main() {
-  let mut ppu = Ppu;
-  let ic = CpuPpuInterconnect {
-    cpu: None,
-    ppu: &mut ppu,
-  };
-  let cpu = Cpu{shared_bus: ic };
-}
-{% endhighlight %}
-
-One drawback is that the type allows a `None` value, even though the reference is always valid after initialization.
-
-* **Step 3**: Handle the exclusive reference
-
-The `*mut Ppu` brings fewer problems, but there are two minor points
-{% highlight rust %}
-struct CpuPpuInterconnect<'a> {
-  cpu: Option<&'a Cpu<'a>>,
-  ppu: &'a mut Ppu,
-}
-struct Cpu<'a>{shared_bus: CpuPpuInterconnect<'a>}
-
-struct Ppu;
-fn copy(ic:&mut CpuPpuInterconnect) {
-  let cpu:&Cpu = ic.cpu.as_ref().unwrap();
-  let ppu:&mut Ppu = ic.ppu;
-  ppu.write(cpu.read());
-}
-
-impl<'a> Cpu<'a> { fn read(&'a self) -> u8 { unimplemented!() } }
-impl Ppu { fn write(&mut self, x:u8) { unimplemented!() } }
-impl<'a> CpuPpuInterconnect<'a> {
-  pub fn cpu(&'a self) -> &'a Cpu<'a> { self.cpu.as_ref().unwrap() }
-}
-fn main() {
-  let mut ppu = Ppu;
-  let ic = CpuPpuInterconnect {
-    cpu: None,
-    ppu: &mut ppu,
-  };
-  let cpu = Cpu{shared_bus: ic };
-}
-{% endhighlight %}
-
-First, `copy` now takes an exclusive reference to the `CpuPpuInterconnect`. Pointers don't need exclusive access, but the reference `ic.ppu` does.
-
-Second, the getter `CpuPpuInterconnect::cpu` had to be inlined in `copy`, because functions lock the entire structure. [Insert reference to Solution #1 which covers this]
+You can use [`block_on`](https://docs.rs/futures/0.3.4/futures/executor/fn.block_on.html) or chained `await`s like a generalized `Deref` that owns the data it wants to return, even in single-threaded code that never naturally blocks on IO. I've never seen Rust code do this, but the syntax sugar might appeal to someone.
 
 ## Conclusion
 
@@ -1152,6 +1143,16 @@ Second, the getter `CpuPpuInterconnect::cpu` had to be inlined in `copy`, becaus
 * [Definition](https://rust-lang.github.io/rfcs/0387-higher-ranked-trait-bounds.html) of early/late-bound lifetimes and `for<'a>` syntax.
 * [Lifetimes RFC](https://rust-lang.github.io/rfcs/0387-higher-ranked-trait-bounds.html)
 * [Lifetimes Lint Warning](https://github.com/rust-lang/rust/issues/42868)
+* The [Async Book](https://rust-lang.github.io/async-book/03_async_await/01_chapter.html)
+
+### Thanks
+
+This article includes information provided by several members of the Rust Discord that answered questions I had:
+* Globi::<!>
+* udoprog
+* hyeonu
+* jebrosen
+* Mutabah
 
 ### Footnotes
 
@@ -1159,3 +1160,24 @@ Second, the getter `CpuPpuInterconnect::cpu` had to be inlined in `copy`, becaus
 [^2]: `None` can't be the name of the constant: 1. `None` is the name of the type. 2. It can't be an ordinary variable - A. `Option<T>` is generic but `None` isn't, so their names would collide. B. It doesn't trigger the [non_snake_case](https://doc.rust-lang.org/rustc/lints/listing/warn-by-default.html#non-snake-case) warning. 3. It can't be a function - even though tuple structs can be used as functions without triggering the warning - because Rust requires parentheses to call a function. 4. 
 
 [^3]: Banks use double-entry accounting. The code is vulnerable to data races. The code is unauthenticated. If the server goes down, money may be credited or debited without the rest of the side effects occurring.
+[^4]: In systems with multiple CPUs, cores, processes, threads, hyperthreads, or speculative execution units, time can't be defined as "number of nanoseconds since some baseline time". Different memory arenas may have different consistency requirements between execution units. Despite this, 1.) Rust's semantics could be defined with respect to a "Rust Virtual Machine" where primitive operations are strictly serialized; the program's observable behavior could be completely partioned into exempt and non-exempt observables; and the compiler could be required to preserve all non-exempt observables. (Examples of exempt observables would be the number of clock cycles executed, or number of bytes allocated; examples of non-exempt observables would be the relative order of system calls or whether the program terminates) 2. Even in hardware with multiple execution units, as long as the base instructions are atomic, every program trace has an associated data dependency graph, and any topological sort of the instructions with respect to it defines a consistent "time that the instruction took place".
+[^5]: A pedant could argue that my phrasing "minimized assignment of storage cells" is problematic, and that ownership is tied to storage cells in one-to-one correspondence with variables that refer to them.
+
+The following code creates two live mutable references to the same storage cell, refuting that storage cells must be in one-to-one correspondence to variables:
+{% highlight rust %}
+struct Foo((),());
+
+fn bar(_:&mut (), _:&mut ()){}
+
+fn main() {
+    let mut foo = Foo((),());
+    let x = &mut foo.0;
+    let y = &mut foo.1;
+    println!("{:p} {:p}", x, y); // Prints "0x7fff74ec9a00 0x7fff74ec9a00"
+    bar(x,y);
+}
+{% endhighlight %}
+
+So borrow-checking is with respect to the variables `x` and `y`, not to the cell holding the `()` they share.
+
+A second pedant, necessarily different from the first, could argue that since `()` occupies 0 bytes, it does not occupy any storage cell at all: Any write can be compiled as a no-op, and any read could manufacture a `()` instead of reading memory. So my `println!` is erroneous in using pointer addresses to prove equality of storage cells. I do not disagree with pedant #2, but observe that this argument would also violate there being a one-to-one correspondence between variables and storage cells. So pedant #2 should also agree that borrow-checking is with respect to variables, not to storage cells.
